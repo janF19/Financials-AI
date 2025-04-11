@@ -1,0 +1,25 @@
+# Environment variables
+.env
+
+# Scripts
+structure.sh
+
+# Documentation
+todo.md
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Downloaded/generated files
+*.docx
+backend/downloaded_report.docx
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# Test files
+backend/test_files/ 
