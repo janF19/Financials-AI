@@ -1,272 +1,280 @@
-from docx import Document
-from docx.shared import Inches, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-import matplotlib.pyplot as plt
-import io
-from typing import Dict, Any, Optional
-from openai import OpenAI
-from backend.config.settings import settings
-from datetime import datetime
+# src/valuation/valuator.py
 
-class ReportGenerator:
-    @staticmethod
-    def generate(data: Dict[str, Any]) -> Document:
-        doc = Document()
-        
-        # Add creation timestamp to the report
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        doc.add_paragraph(f"Report generated: {timestamp}")
-        
-        # Title
-        title = doc.add_heading('Company Valuation Report', 0)
-        title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        
-        # Company Overview Section
-        doc.add_heading('Company Overview', level=1)
-        
-        # Safely access company information with fallbacks
-        company_info = data.get('financial_data', {}).get('information', {})
-        if not company_info:
-            company_info = {
-                'company_name': 'N/A',
-                'industry': 'N/A',
-                'headquarters': 'N/A',
-                'established': 'N/A',
-                'employees': 'N/A',
-                'main_activities': ['N/A']
-            }
-            
-        overview_para = doc.add_paragraph()
-        overview_para.add_run(f"Company: {company_info.get('company_name', 'N/A')}\n").bold = True
-        overview_para.add_run(f"Industry: {company_info.get('industry', 'N/A')}\n")
-        overview_para.add_run(f"Location: {company_info.get('headquarters', 'N/A')}\n")
-        overview_para.add_run(f"Established: {company_info.get('established', 'N/A')}\n")
-        overview_para.add_run(f"Employees: {company_info.get('employees', 'N/A')}\n")
-        
-        # Get AI-generated company description
-        description = ReportGenerator._get_company_description(company_info)
-        doc.add_paragraph(description)
-        
-        # Financial Analysis Section
-        doc.add_heading('Financial Analysis', level=1)
-        
-        # Add key metrics with safe access
-        metrics = data.get('financial_data', {}).get('income_statement', {})
-        if not metrics:
-            metrics = {}
-            
-        metrics_table = doc.add_table(rows=1, cols=2)
-        metrics_table.style = 'Table Grid'
-        metrics_table.rows[0].cells[0].text = 'Key Metrics (thousands Kč)'
-        metrics_table.rows[0].cells[1].text = '2023'
-        
-        # Define metrics with fallback values
-        key_metrics = [
-            ('Revenue', metrics.get('revenue_from_products_and_services_current', 'N/A')),
-            ('EBIT', metrics.get('operating_profit_current', 'N/A'))
-        ]
-        
-        for metric, value in key_metrics:
-            row = metrics_table.add_row()
-            row.cells[0].text = metric
-            # Format only if the value is numeric
-            row.cells[1].text = f"{value:,}" if isinstance(value, (int, float)) else str(value)
-            
-        # Generate Financial Health Analysis
-        doc.add_heading('Financial Health Assessment', level=2)
-        health_analysis = ReportGenerator._analyze_financial_health(data.get('financial_data', {}))
-        doc.add_paragraph(health_analysis)
-        
-        # Valuation Results with safer handling
-        doc.add_heading('Valuation Analysis', level=1)
-        
-        # Handle missing valuation data
-        valuation = data.get('result_valuation')
-        if not valuation:
-            valuation = {
-                'EV/EBIT Multiple': 'N/A',
-                'EV/EBITDA Multiple': 'N/A',
-                'Enterprise Value based on EBIT (Kč thousands)': 'N/A',
-                'Enterprise Value based on EBITDA (Kč thousands)': 'N/A',
-                'EBIT': 0,
-                'EBITDA': 0
-            }
-        
-        val_para = doc.add_paragraph()
-        val_para.add_run('Enterprise Value Based on Multiples:\n').bold = True
-        
-        # Safe access with type checking
-        ev_ebit_multiple = valuation.get('EV/EBIT Multiple', 'N/A')
-        ev_ebitda_multiple = valuation.get('EV/EBITDA Multiple', 'N/A')
-        ev_ebit_value = valuation.get('Enterprise Value based on EBIT (Kč thousands)', 'N/A')
-        ev_ebitda_value = valuation.get('Enterprise Value based on EBITDA (Kč thousands)', 'N/A')
-        
-        # Format values for display
-        val_para.add_run(f"• EV/EBIT Multiple ({ev_ebit_multiple}x): ")
-        if isinstance(ev_ebit_value, (int, float)):
-            val_para.add_run(f"{ev_ebit_value:,.0f} thousands Kč\n")
-        else:
-            val_para.add_run(f"{ev_ebit_value}\n")
-            
-        val_para.add_run(f"• EV/EBITDA Multiple ({ev_ebitda_multiple}x): ")
-        if isinstance(ev_ebitda_value, (int, float)):
-            val_para.add_run(f"{ev_ebitda_value:,.0f} thousands Kč\n")
-        else:
-            val_para.add_run(f"{ev_ebitda_value}\n")
-        
-        # Add EBIT/EBITDA comparison graph if data is available
-        if isinstance(valuation.get('EBIT'), (int, float)) and isinstance(valuation.get('EBITDA'), (int, float)):
-            ReportGenerator._add_valuation_graph(doc, valuation)
-        else:
-            doc.add_paragraph("Insufficient data to generate EBIT/EBITDA comparison graph.")
-        
-        # Generate and add conclusion
-        conclusion = ReportGenerator._generate_conclusion(valuation, health_analysis)
-        doc.add_heading('Conclusion', level=1)
-        doc.add_paragraph(conclusion)
-        
-        return doc
+from typing import Dict, Any, Tuple
+import requests
+from bs4 import BeautifulSoup
+import json
+import pandas as pd
+import os
+from io import StringIO
+import traceback
 
-    @staticmethod
-    def _analyze_financial_health(financial_data: Dict) -> str:
-        """Generate financial health analysis based on the financial data"""
-        # Safe access to metrics
-        metrics = financial_data.get('income_statement', {})
-        if not metrics:
-            return "Insufficient financial data available to perform a comprehensive health analysis."
+class CompanyValuator:
+    def __init__(self, financial_data: Dict[str, Any]):
+        self.financial_data = financial_data
+    
+    
+    def get_multiples(self, industry: str) -> Tuple[float, float]:
+        """
+        Returns EV/EBITDA and EV/EBIT multiples for a given industry from hardcoded Damodaran data.
+        Uses January 2025 data for "All firms" category.
+        """
+        # Normalize the input industry name
+        normalized_industry = industry.lower().strip()
         
-        # Safely get metrics with default values
-        revenue = metrics.get('revenue_from_products_and_services_current', 'N/A')
-        ebit = metrics.get('operating_profit_current', 'N/A')
-        #operating_profit = metrics.get('operating_profit_current', 'N/A')
+        # Hardcoded industry multiples from January 2025 Damodaran data
+        # Using the "All firms" columns for EV/EBITDA and EV/EBIT
+        industry_multiples = {
+        "advertising": (11.52, 14.65),
+        "aerospace/defense": (19.24, 23.33),
+        "air transport": (7.82, 12.40),
+        "apparel": (12.56, 15.35),
+        "auto & truck": (5.50, 8.99),
+        "auto parts": (5.44, 9.73),
+        "beverage (alcoholic)": (9.70, 12.20),
+        "beverage (soft)": (13.19, 17.16),
+        "broadcasting": (7.87, 8.75),
+        "building materials": (13.90, 17.57),
+        "business & consumer services": (13.96, 18.16),
+        "cable tv": (7.25, 34.32),
+        "chemical (basic)": (15.89, 44.60),
+        "chemical (diversified)": (7.93, 23.12),
+        "chemical (specialty)": (15.23, 23.73),
+        "coal & related energy": (6.02, 5.81),
+        "computer services": (14.77, 17.42),
+        "computers/peripherals": (17.37, 20.48),
+        "construction supplies": (8.46, 11.31),
+        "diversified": (8.98, 8.11),
+        "drugs (pharmaceutical)": (12.70, 14.80),
+        "education": (14.98, 18.18),
+        "electrical equipment": (20.97, 25.35),
+        "electronics (general)": (14.86, 18.32),
+        "engineering/construction": (8.56, 12.15),
+        "entertainment": (33.45, 52.74),
+        "environmental & waste services": (9.41, 14.41),
+        "farming/agriculture": (9.16, 13.58),
+        "financial svcs. (non-bank & insurance)": (79.73, 88.79),
+        "food processing": (11.38, 15.30),
+        "food wholesalers": (8.18, 20.70),
+        "furn/home furnishings": (9.54, 23.01),
+        "green & renewable energy": (11.23, 18.44),
+        "healthcare products": (18.96, 26.70),
+        "healthcare support services": (13.04, 18.14),
+        "heathcare information and technology": (18.83, 30.25),
+        "homebuilding": (10.00, 11.20),
+        "hospitals/healthcare facilities": (15.20, 29.72),
+        "hotel/gaming": (13.76, 18.14),
+        "household products": (15.31, 16.89),
+        "information services": (5.97, 8.61),
+        "insurance (general)": (8.52, 7.41),
+        "insurance (life)": (11.91, 10.90),
+        "insurance (prop/cas.)": (12.67, 11.00),
+        "investments & asset management": (17.05, 14.70),
+        "machinery": (12.80, 16.16),
+        "metals & mining": (5.51, 9.01),
+        "office equipment & services": (6.45, 9.08),
+        "oil/gas (integrated)": (3.28, 5.96),
+        "oil/gas (production and exploration)": (2.33, 4.09),
+        "oil/gas distribution": (6.35, 8.82),
+        "oilfield svcs/equip.": (3.19, 6.32),
+        "packaging & container": (11.20, 19.42),
+        "paper/forest products": (10.45, 15.15),
+        "power": (6.86, 10.51),
+        "precious metals": (6.84, 19.60),
+        "publishing & newspapers": (10.56, 15.80),
+        "r.e.i.t.": (22.98, 22.34),
+        "real estate (development)": (26.73, 81.05),
+        "real estate (general/diversified)": (34.05, 45.85),
+        "real estate (operations & services)": (25.93, 25.65),
+        "recreation": (11.17, 15.97),
+        "reinsurance": (9.37, 8.91),
+        "restaurant/dining": (17.29, 24.44),
+        "retail (automotive)": (8.17, 19.16),
+        "retail (building supply)": (8.83, 11.35),
+        "retail (distributors)": (11.62, 15.75),
+        "retail (general)": (22.33, 31.66),
+        "retail (grocery and food)": (8.99, 13.86),
+        "retail (reits)": (18.88, 17.95),
+        "retail (special lines)": (15.44, 18.41),
+        "rubber& tires": (5.51, 8.63),
+        "semiconductor": (8.09, 14.70),
+        "semiconductor equip": (24.90, 30.99),
+        "shipbuilding & marine": (6.40, 9.99),
+        "shoe": (21.18, 26.32),
+        "software (entertainment)": (15.84, 21.64),
+        "software (internet)": (10.62, 21.61),
+        "software (system & application)": (32.83, 33.47),
+        "steel": (4.63, 27.19),
+        "telecom (wireless)": (7.44, 13.49),
+        "telecom. equipment": (8.92, 12.59),
+        "telecom. services": (7.11, 13.46),
+        "tobacco": (7.18, 8.61),
+        "transportation": (11.31, 14.95),
+        "transportation (railroads)": (13.87, 21.24),
+        "trucking": (8.12, 12.66),
+        "utility (general)": (5.91, 9.69),
+        "utility (water)": (18.11, 28.94),
+        }
         
-        # Format values only if they are numeric
-        revenue_str = f"{revenue:,.0f}" if isinstance(revenue, (int, float)) else str(revenue)
-        ebit_str = f"{ebit:,.0f}" if isinstance(ebit, (int, float)) else str(ebit)
-        #operating_profit_str = f"{operating_profit:,.0f}" if isinstance(operating_profit, (int, float)) else str(operating_profit)
+        # Default multiples if the industry is not found
+        default_ev_ebitda = 18.53  # Total Market value
+        default_ev_ebit = 25.16    # Total Market value
         
-        # Check if we have enough data to perform analysis
-        available_metrics = [m for m in [revenue, ebit] if m != 'N/A']
-        if not available_metrics:
-            return "No financial metrics available to perform analysis."
-        
-        # Create analysis using OpenAI
-        try:
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            prompt = f"""
-            Analyze the financial health of a company based on these metrics (all values in thousands Kč):
-            - Revenue: {revenue_str}
-            - EBIT: {ebit_str}
-
-            Provide a brief (2-3 sentences) analysis of the company's financial health based on these metrics.
-            Focus on profitability and operational efficiency. If any metrics are unavailable (shown as N/A),
-            focus on the available metrics only.
-            """
-            
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=350
-            )
-            
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Unable to generate financial health analysis due to an error: {str(e)}"
-
-    @staticmethod
-    def _get_company_description(company_info: Dict) -> str:
-        # Check if we have the minimum required information
-        if not company_info.get('company_name') or company_info.get('company_name') == 'N/A':
-            return "Insufficient company information available to generate a detailed description."
-        
-        # Safe access to main activities
-        main_activities = company_info.get('main_activities', ['N/A'])
-        if not isinstance(main_activities, list):
-            main_activities = ['N/A']
-            
-        try:
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            prompt = f"""
-            Write a brief (2-3 sentences) professional description for this company:
-            Company: {company_info.get('company_name', 'N/A')}
-            Industry: {company_info.get('industry', 'N/A')}
-            Main activities: {', '.join(main_activities)}
-            Location: {company_info.get('headquarters', 'N/A')}
-            Established: {company_info.get('established', 'N/A')}
-            """
-            
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=350
-            )
-            
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Unable to generate company description due to an error: {str(e)}"
-
-    @staticmethod
-    def _add_valuation_graph(doc: Document, valuation: Dict):
-        try:
-            plt.figure(figsize=(8, 4))
-            metrics = ['EBIT', 'EBITDA']
-            
-            # Safely access EBIT and EBITDA values with defaults
-            ebit_value = valuation.get('EBIT', 0)
-            ebitda_value = valuation.get('EBITDA', 0)
-            
-            # Only proceed if we have numeric values
-            if not isinstance(ebit_value, (int, float)) or not isinstance(ebitda_value, (int, float)):
-                doc.add_paragraph("Insufficient data to generate EBIT/EBITDA comparison graph.")
-                return
+        # Try to find the industry in our dictionary
+        for ind, multiples in industry_multiples.items():
+            if normalized_industry in ind or ind in normalized_industry:
+                print(f"Found match: '{ind}' for query '{normalized_industry}'")
+                ev_ebitda, ev_ebit = multiples
                 
-            values = [ebit_value, ebitda_value]
-            
-            plt.bar(metrics, values)
-            plt.title('EBIT vs EBITDA Comparison')
-            plt.ylabel('Value (thousands Kč)')
-            
-            # Save the plot to memory
-            img_stream = io.BytesIO()
-            plt.savefig(img_stream, format='png', bbox_inches='tight')
-            img_stream.seek(0)
-            
-            # Add the image to the document
-            doc.add_picture(img_stream, width=Inches(6))
-            plt.close()
-        except Exception as e:
-            doc.add_paragraph(f"Error generating valuation graph: {str(e)}")
-
-    @staticmethod
-    def _generate_conclusion(valuation: Dict, health_analysis: str) -> str:
-        # Check if we have the minimum required information
-        if not valuation or not isinstance(valuation, dict):
-            return "Insufficient valuation data available to generate a conclusion."
-            
-        # Safely access valuation metrics
-        ev_ebit = valuation.get('Enterprise Value based on EBIT (Kč thousands)', 'N/A')
-        ev_ebitda = valuation.get('Enterprise Value based on EBITDA (Kč thousands)', 'N/A')
+                # Handle NA values
+                if ev_ebitda is None:
+                    ev_ebitda = default_ev_ebitda
+                if ev_ebit is None:
+                    ev_ebit = default_ev_ebit
+                    
+                return ev_ebitda, ev_ebit
         
-        # Format values for display in the prompt
-        ev_ebit_str = f"{ev_ebit:,.0f}" if isinstance(ev_ebit, (int, float)) else str(ev_ebit)
-        ev_ebitda_str = f"{ev_ebitda:,.0f}" if isinstance(ev_ebitda, (int, float)) else str(ev_ebitda)
+        # If no match is found, provide default values and log the miss
+        print(f"Could not find exact match for '{industry}'. Using market average.")
+        return default_ev_ebitda, default_ev_ebit
         
+            
+    
+    
+    def adjust_values_to_2025(self, base_year: int, amount: float) -> float:
+        """
+        Adjusts financial values from base_year to 2025 using compound inflation.
+        
+        Args:
+            base_year: The year of the financial data
+            amount: The amount to be adjusted
+        
+        Returns:
+            float: Inflation-adjusted amount for 2025
+        """
+        #czech inflation data consider using api later
+        INFLATION_DATA = {
+            2019: 0.028,
+            2020: 0.032,
+            2021: 0.038,
+            2022: 0.151,
+            2023: 0.107,
+            2024: 0.024 
+        }
+        
+        def get_inflation_rate(year: int) -> float:
+            if year in INFLATION_DATA:
+                return INFLATION_DATA[year]
+            # Use average inflation if year not available
+            return sum(INFLATION_DATA.values()) / len(INFLATION_DATA)
+        
+        target_year = 2025
+        
+        # Return original amount if base_year is beyond target
+        if base_year >= target_year:
+            return amount
+        
+        # Calculate compound inflation factor
+        inflation_factor = 1.0
+        for year in range(base_year + 1, target_year + 1):
+            rate = get_inflation_rate(year)
+            inflation_factor *= (1 + rate)
+        
+        return amount * inflation_factor
+    
+    
+    
+    
+    def calculate_multiples(self):
         try:
-            client = OpenAI(api_key=settings.OPENAI_API_KEY)
-            prompt = f"""
-            Generate a brief conclusion (2-3 sentences) for a company valuation report based on:
+            # Convert period to integer with error handling
+            try:
+                period = int(self.financial_data['information']['accounting_period'])
+            except (ValueError, TypeError):
+                print(f"Warning: Invalid accounting period format: {self.financial_data['information'].get('accounting_period')}. Using current year 2024.")
+                #fallback is last year
+                period = 2024
             
-            EV/EBIT Valuation: {ev_ebit_str} thousands Kč
-            EV/EBITDA Valuation: {ev_ebitda_str} thousands Kč
-            Financial Health Analysis: {health_analysis}
-            """
+            # Get values with safe defaults if they're None
+            operating_profit = self.financial_data['income_statement'].get('operating_profit_current')
+            depreciation_amortization = self.financial_data['income_statement'].get('depreciation_current')
+            industry = self.financial_data['information'].get('industry', 'Unknown')
             
-            response = client.chat.completions.create(
-                model="gpt-4",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=350
-            )
+            print(f"Searching for industry: {industry}")  # Debug print
             
-            return response.choices[0].message.content
-        except Exception as e:
-            return f"Unable to generate conclusion due to an error: {str(e)}"
+            # Check for None values and handle them
+            if operating_profit is None:
+                print("Warning: Operating profit is None. Valuation may be incomplete.")
+                ebit = None
+            else:
+                ebit = operating_profit
+                
+            # Calculate EBITDA only if both values are available
+            if ebit is not None and depreciation_amortization is not None:
+                ebitda = ebit + depreciation_amortization
+            elif ebit is not None:
+                print("Warning: Depreciation/amortization is None. EBITDA will equal EBIT.")
+                ebitda = ebit
+            else:
+                ebitda = None
+                print("Warning: Cannot calculate EBITDA due to missing data.")
+            
+            # Store original values with period
+            ebit_original = (ebit, period) if ebit is not None else (None, period)
+            ebitda_original = (ebitda, period) if ebitda is not None else (None, period)
+            
+            # Only adjust values if they're not None
+            if period != 2024:
+                if ebit is not None:
+                    ebit = self.adjust_values_to_2025(period, ebit)
+                if ebitda is not None:
+                    ebitda = self.adjust_values_to_2025(period, ebitda)
+            
+            # Get multiples once
+            ev_ebitda_multiple, ev_ebit_multiple = self.get_multiples(industry)
+
+            # Calculate Enterprise Value only if values are available
+            enterprise_ebitda_value = ebitda * ev_ebitda_multiple if ebitda is not None else None
+            enterprise_ebit_value = ebit * ev_ebit_multiple if ebit is not None else None
+
+            # Unpack tuples for clearer dictionary structure
+            return {
+                "EBIT original": {
+                    "value": ebit_original[0],
+                    "year": ebit_original[1]
+                },
+                "EBITDA original": {
+                    "value": ebitda_original[0],
+                    "year": ebitda_original[1]
+                },
+                "EBIT": ebit,
+                "EBITDA": ebitda,
+                "EV/EBITDA Multiple": ev_ebitda_multiple,
+                "EV/EBIT Multiple": ev_ebit_multiple,
+                "Enterprise Value based on EBITDA (Kč thousands)": enterprise_ebitda_value,
+                "Enterprise Value based on EBIT (Kč thousands)": enterprise_ebit_value
+            }
+        except KeyError as e:
+            print(f"Error: Missing required financial data key: {e}")
+            return None
+
+        
+    def calculate_asset_based(self):
+        # Implement asset-based valuation
+        pass
+    
+
+
+if __name__ == "__main__":
+    # Get the directory where the script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Construct the full path to financial_data.json
+    json_path = os.path.join(script_dir, 'financial_data.json')
+    
+    with open(json_path, 'r', encoding='utf-8') as f:
+        finance_data = json.load(f)
+    
+    valuator = CompanyValuator(finance_data)
+    result = valuator.calculate_multiples()
+    print(result)

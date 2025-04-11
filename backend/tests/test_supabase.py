@@ -1,6 +1,6 @@
 import os
 import requests
-import jwt
+from jose import jwt
 import datetime
 from dotenv import load_dotenv
 
@@ -20,15 +20,9 @@ def test_supabase_connection():
         print("❌ Failed to load Supabase credentials from .env file")
         return False
     
-    # Extract the project URL from the database URL
-    # Convert from postgresql://user:pass@db.xyz.supabase.co:5432/postgres
-    # to https://xyz.supabase.co
     try:
-        # Extract the domain part
-        domain_part = supabase_url.split('@')[1].split(':')[0]
-        project_ref = domain_part.split('.')[1]
-        api_url = f"https://{project_ref}.supabase.co"
-        
+        # Use the URL directly since it's already in the correct format
+        api_url = supabase_url.rstrip('/')
         print(f"API URL: {api_url}")
         
         # Test REST API connection
@@ -83,10 +77,8 @@ def check_report_bucket():
         return False
     
     try:
-        # Extract the domain part
-        domain_part = supabase_url.split('@')[1].split(':')[0]
-        project_ref = domain_part.split('.')[1]
-        api_url = f"https://{project_ref}.supabase.co"
+        # Use the URL directly since it's already in the correct format
+        api_url = supabase_url.rstrip('/')
         
         # Set up headers for authentication
         headers = {

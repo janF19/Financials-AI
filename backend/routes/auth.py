@@ -37,39 +37,47 @@ async def register(user_data: UserCreate):
     """
     Register a new user.
     """
-    # Check if email already exists
-    existing_user = supabase.table("users").select("*").eq("email", user_data.email).execute()
-    
-    if existing_user.data:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered",
+    try:
+        # Check if email already exists
+        existing_user = supabase.table("users").select("*").eq("email", user_data.email).execute()
+        
+        if existing_user.data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered",
+            )
+        
+        # Hash the password
+        hashed_password = get_password_hash(user_data.password)
+        
+        # Create user record
+        new_user = {
+            "id": str(uuid.uuid4()),
+            "email": user_data.email,
+            "password_hash": hashed_password,
+        }
+        
+        response = supabase.table("users").insert(new_user).execute()
+        
+        if not response.data:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to create user",
+            )
+        
+        created_user = response.data[0]
+        return UserResponse(
+            id=created_user["id"],
+            email=created_user["email"],
+            created_at=created_user["created_at"],
         )
-    
-    # Hash the password
-    hashed_password = get_password_hash(user_data.password)
-    
-    # Create user record
-    new_user = {
-        "id": str(uuid.uuid4()),
-        "email": user_data.email,
-        "password_hash": hashed_password,
-    }
-    
-    response = supabase.table("users").insert(new_user).execute()
-    
-    if not response.data:
+    except Exception as e:
+        # Log the actual error for debugging
+        print(f"Registration error: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to create user",
+            detail=f"Registration failed: {str(e)}",
         )
-    
-    created_user = response.data[0]
-    return UserResponse(
-        id=created_user["id"],
-        email=created_user["email"],
-        created_at=created_user["created_at"],
-    )
 
 
 @router.post("/token")

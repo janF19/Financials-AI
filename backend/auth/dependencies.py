@@ -6,12 +6,19 @@ from typing import Optional
 from uuid import UUID
 
 from backend.models.user import User
-from backend.database import supabase
+from backend.services.user_service import UserService
 from backend.config.settings import settings
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
-async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
+# Dependency to get the UserService
+def get_user_service():
+    return UserService()
+
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    user_service: UserService = Depends(get_user_service)
+) -> User:
     """
     Validate access token and return the current user.
     """
@@ -30,14 +37,13 @@ async def get_current_user(token: str = Depends(oauth2_scheme)) -> User:
         if user_id is None:
             raise credentials_exception
             
-        # Get user from database
-        user_response = supabase.table("users").select("*").eq("id", user_id).execute()
+        # Use the service to get the user
+        user = await user_service.get_user_by_id(user_id)
         
-        if not user_response.data:
+        if not user:
             raise credentials_exception
             
-        user_data = user_response.data[0]
-        return User(**user_data)
+        return user
         
     except JWTError:
         raise credentials_exception

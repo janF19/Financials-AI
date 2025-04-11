@@ -77,7 +77,7 @@ async def process_financials(
             content={
                 "status": "processing",
                 "report_id": report_id,
-                "message": "Your file is being processed. Check the dashboard for updates."
+                "message": "Your file is being processed. Check the dashboard for updates in 10 seconds."
             }
         )
     

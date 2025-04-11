@@ -4,7 +4,7 @@ import io
 import requests
 from typing import List, Optional
 from uuid import UUID
-from config import settings
+from backend.config import settings
 from backend.models.user import User
 from backend.models.report import ReportResponse
 from backend.auth.dependencies import get_current_user

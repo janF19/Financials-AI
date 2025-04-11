@@ -4,6 +4,9 @@ from pathlib import Path
 from datetime import datetime
 from typing import Optional
 
+# Add explicit import for PyJWT to ensure it's available for Supabase
+import jwt as pyjwt
+
 from backend.database import supabase
 from backend.config.settings import settings
 from backend.models.report import ReportCreate

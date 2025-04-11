@@ -1,6 +1,6 @@
 import requests
 import os
-from backend.src.ocr.mistral_processor import MistralOCRProcessor
+from backend.processors.ocr.mistral_processor import MistralOCRProcessor
 from typing import Optional, Union, Tuple, Dict
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
