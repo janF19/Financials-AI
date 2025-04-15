@@ -205,37 +205,49 @@ class ReportGenerator:
         except Exception as e:
             return f"Unable to generate company description due to an error: {str(e)}"
 
-    @staticmethod
-    def _add_valuation_graph(doc: Document, valuation: Dict):
-        try:
-            plt.figure(figsize=(8, 4))
-            metrics = ['EBIT', 'EBITDA']
-            
-            # Safely access EBIT and EBITDA values with defaults
-            ebit_value = valuation.get('EBIT', 0)
-            ebitda_value = valuation.get('EBITDA', 0)
-            
-            # Only proceed if we have numeric values
-            if not isinstance(ebit_value, (int, float)) or not isinstance(ebitda_value, (int, float)):
-                doc.add_paragraph("Insufficient data to generate EBIT/EBITDA comparison graph.")
-                return
+
+
+
+
+@staticmethod
+def _add_valuation_graph(doc: Document, valuation: Dict):
+    try:
+        import matplotlib
+        matplotlib.use('Agg')  # Set non-interactive backend
+        import matplotlib.pyplot as plt  # Import after setting backend
+
+        plt.figure(figsize=(8, 4))
+        metrics = ['EBIT', 'EBITDA']
+        
+        # Safely access EBIT and EBITDA values with defaults
+        ebit_value = valuation.get('EBIT', 0)
+        ebitda_value = valuation.get('EBITDA', 0)
+        
+        # Only proceed if we have numeric values
+        if not isinstance(ebit_value, (int, float)) or not isinstance(ebitda_value, (int, float)):
+            doc.add_paragraph("Insufficient data to generate EBIT/EBITDA comparison graph.")
+            return
                 
-            values = [ebit_value, ebitda_value]
-            
-            plt.bar(metrics, values)
-            plt.title('EBIT vs EBITDA Comparison')
-            plt.ylabel('Value (thousands Kč)')
-            
-            # Save the plot to memory
-            img_stream = io.BytesIO()
-            plt.savefig(img_stream, format='png', bbox_inches='tight')
-            img_stream.seek(0)
-            
-            # Add the image to the document
-            doc.add_picture(img_stream, width=Inches(6))
-            plt.close()
-        except Exception as e:
-            doc.add_paragraph(f"Error generating valuation graph: {str(e)}")
+        values = [ebit_value, ebitda_value]
+        
+        plt.bar(metrics, values)
+        plt.title('EBIT vs EBITDA Comparison')
+        plt.ylabel('Value (thousands Kč)')
+        
+        # Save the plot to memory
+        img_stream = io.BytesIO()
+        plt.savefig(img_stream, format='png', bbox_inches='tight')
+        img_stream.seek(0)
+        
+        # Add the image to the document
+        doc.add_picture(img_stream, width=Inches(6))
+        plt.close()
+    except Exception as e:
+        doc.add_paragraph(f"Error generating valuation graph: {str(e)}")
+
+
+
+
 
     @staticmethod
     def _generate_conclusion(valuation: Dict, health_analysis: str) -> str:

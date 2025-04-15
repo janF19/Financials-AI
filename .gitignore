@@ -23,3 +23,7 @@ ENV/
 
 # Test files
 backend/test_files/ 
+
+frontend/node_modules
+
+docs.txt

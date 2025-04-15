@@ -2,18 +2,26 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 import io
 import requests
-from typing import List, Optional
+from typing import List, Optional, Dict
 from uuid import UUID
 from backend.config import settings
 from backend.models.user import User
 from backend.models.report import ReportResponse
 from backend.auth.dependencies import get_current_user
 from backend.database import supabase
+from pydantic import BaseModel
+import logging
 
 router = APIRouter(prefix="/reports", tags=["reports"])
 
+logger = logging.getLogger(__name__)
 
-@router.get("/", response_model=List[ReportResponse])
+# Create a new response model for the paginated reports
+class PaginatedReportsResponse(BaseModel):
+    reports: List[ReportResponse]
+    total: int
+
+@router.get("/", response_model=PaginatedReportsResponse)
 async def list_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
@@ -23,22 +31,37 @@ async def list_reports(
     """
     List all reports for the current user with pagination.
     """
-    query = supabase.table("reports").select("*").eq("user_id", str(current_user.id))
-    
-    # Apply status filter if provided
-    if status:
-        query = query.eq("status", status)
-    
-    # Apply pagination
-    query = query.order("created_at", desc=True).range(skip, skip + limit - 1)
-    
-    # Execute query
-    response = query.execute()
-    
-    if not response.data:
-        return []
-    
-    return [ReportResponse(**report) for report in response.data]
+    try:
+        query = supabase.table("reports").select("*").eq("user_id", str(current_user.id))
+        
+        # Apply status filter if provided
+        if status:
+            query = query.eq("status", status)
+        
+        # Get total count first
+        count_query = supabase.table("reports").select("*", count="exact").eq("user_id", str(current_user.id))
+        if status:
+            count_query = count_query.eq("status", status)
+        count_response = count_query.execute()
+        total_count = count_response.count if hasattr(count_response, 'count') else 0
+        
+        # Apply pagination
+        query = query.order("created_at", desc=True).range(skip, skip + limit - 1)
+        
+        # Execute query
+        response = query.execute()
+        
+        reports = [ReportResponse(**report) for report in response.data] if response.data else []
+        
+        # Add debug logging to help diagnose issues
+        print(f"Reports query: User ID: {current_user.id}, Status filter: {status}")
+        print(f"Found {total_count} reports, returning {len(reports)}")
+        
+        # Return in the format expected by the frontend
+        return {"reports": reports, "total": total_count}
+    except Exception as e:
+        print(f"Error fetching reports: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch reports: {str(e)}")
 
 
 @router.get("/{report_id}", response_model=ReportResponse)
@@ -65,15 +88,18 @@ async def download_report(
     """
     Download a specific report.
     """
+    logger.info(f"Download request received for report_id: {report_id}, user: {current_user.id}")
+    
     # Get report data
     response = supabase.table("reports").select("*").eq("id", str(report_id)).eq("user_id", str(current_user.id)).execute()
+    logger.info(f"Database response: {response}")
     
     if not response.data:
         raise HTTPException(status_code=404, detail="Report not found")
     
     report = response.data[0]
     
-    if report["status"] != "processed":
+    if report["status"] not in ["processed", "completed"]:
         raise HTTPException(status_code=400, detail=f"Report is not ready for download (status: {report['status']})")
     
     # Get report from storage
