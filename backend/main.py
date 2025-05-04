@@ -3,7 +3,7 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.routes import auth, financials, dashboard, reports, health
+from backend.routes import auth, financials, dashboard, reports, health, search
 from backend.config.settings import settings
 
 app = FastAPI(
@@ -28,6 +28,7 @@ app.include_router(financials.router)
 app.include_router(dashboard.router)
 app.include_router(reports.router)
 app.include_router(health.router)
+app.include_router(search.router)
 
 if __name__ == "__main__":
     uvicorn.run(

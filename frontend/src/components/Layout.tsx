@@ -24,6 +24,7 @@ import {
   Dashboard as DashboardIcon,
   Description as ReportIcon,
   Upload as UploadIcon,
+  Search as SearchIcon,
   Person as PersonIcon,
   ExitToApp as LogoutIcon
 } from '@mui/icons-material';
@@ -68,6 +69,7 @@ const Layout = () => {
     { text: 'Dashboard', icon: <DashboardIcon />, path: '/dashboard' },
     { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
     { text: 'Process', icon: <UploadIcon />, path: '/process' },
+    { text: 'Search', icon: <SearchIcon />, path: '/search' },
   ];
   
   const drawer = (
@@ -116,7 +118,7 @@ const Layout = () => {
             <MenuIcon />
           </IconButton>
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
-            {navItems.find(item => item.path === location.pathname)?.text || 'Financial Valuation'}
+            {navItems.find(item => location.pathname.startsWith(item.path))?.text || 'Financial Valuation'}
           </Typography>
           
           <div>
@@ -198,7 +200,7 @@ const Layout = () => {
           flexGrow: 1,
           p: 3,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
-          mt: 8,
+          mt: { xs: 7, sm: 8 },
         }}
       >
         <Outlet />

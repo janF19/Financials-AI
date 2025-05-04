@@ -18,6 +18,8 @@ import Reports from './pages/Reports';
 // @ts-ignore
 import Process from './pages/Process';
 // @ts-ignore
+import SearchPage from './pages/Search';
+// @ts-ignore
 import Profile from './pages/Profile';
 // @ts-ignore
 import NotFound from './pages/NotFound';
@@ -29,21 +31,25 @@ const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   const { isAuthenticated, isLoading } = useAppSelector((state) => state.auth);
   
   if (isLoading) {
-    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+    return <div className="flex justify-center items-center h-screen">Loading Authentication...</div>;
   }
   
   if (!isAuthenticated) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" replace />;
   }
   
   return children;
 };
 
 const PublicRoute = ({ children }: { children: React.ReactElement }) => {
-  const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const { isAuthenticated, isLoading } = useAppSelector((state) => state.auth);
+  
+  if (isLoading) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  }
   
   if (isAuthenticated) {
-    return <Navigate to="/dashboard" />;
+    return <Navigate to="/dashboard" replace />;
   }
   
   return children;
@@ -51,17 +57,14 @@ const PublicRoute = ({ children }: { children: React.ReactElement }) => {
 
 function App() {
   const dispatch = useAppDispatch();
-  const { isAuthenticated } = useAppSelector((state) => state.auth);
   
   useEffect(() => {
-    if (isAuthenticated) {
-      dispatch(getProfile());
-    }
-  }, [dispatch, isAuthenticated]);
+    dispatch(getProfile());
+  }, [dispatch]);
   
   return (
     <Router>
-      <ToastContainer position="top-right" autoClose={3000} />
+      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} newestOnTop={false} closeOnClick rtl={false} pauseOnFocusLoss draggable pauseOnHover />
       <Routes>
         {/* Public routes */}
         <Route 
@@ -90,10 +93,11 @@ function App() {
             </ProtectedRoute>
           }
         >
-          <Route index element={<Navigate to="/dashboard" />} />
+          <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="reports" element={<Reports />} />
           <Route path="process" element={<Process />} />
+          <Route path="search" element={<SearchPage />} />
           <Route path="profile" element={<Profile />} />
         </Route>
         

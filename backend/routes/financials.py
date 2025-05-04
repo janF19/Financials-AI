@@ -26,6 +26,7 @@ async def process_financials(
 ):
     """
     Process a PDF file and generate a financial report.
+    
     """
     # Validate file type
     if not file.filename.lower().endswith('.pdf'):

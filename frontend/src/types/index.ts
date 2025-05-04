@@ -77,3 +77,24 @@ export interface User {
     reportId: string | null;
     error: string | null;
   }
+
+  export interface Company {
+    id: string; // Assuming the backend provides an ID
+    name: string;
+    ico: string;
+    description?: string; // Optional based on your example
+    registration_date?: string; // Match backend snake_case if applicable
+    address?: string;
+    file_number?: string;
+    court?: string;
+    // Add any other relevant fields from your backend API
+  }
+  
+  export interface SearchParams {
+    person_name?: string;
+    company_name?: string;
+    ico?: string;
+  } 
+  
+  
+  

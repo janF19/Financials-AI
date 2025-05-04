@@ -1,6 +1,6 @@
 // src/services/api.ts
 import axios, { AxiosRequestConfig } from 'axios';
-import { LoginCredentials, RegisterCredentials, AuthResponse, Report, ReportFilterParams, DashboardSummary } from '../types';
+import { LoginCredentials, RegisterCredentials, AuthResponse, Report, ReportFilterParams, DashboardSummary, Company, SearchParams } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -114,6 +114,30 @@ export const dashboardService = {
   getReportsSummary: async (): Promise<DashboardSummary> => {
     const response = await api.get('/dashboard/reports-summary');
     return response.data;
+  },
+};
+
+// Search service
+export const searchService = {
+  searchCompanies: async (params: SearchParams): Promise<Company[]> => {
+    // Adjust the endpoint '/search/companies' to your actual backend route
+    const endpoint = '/search';
+    console.log(`API call: searchCompanies to ${endpoint} with params:`, params);
+    try {
+      // Filter out empty params before sending
+      const filteredParams = Object.fromEntries(
+        Object.entries(params).filter(([_, v]) => v != null && v !== '')
+      );
+
+      const response = await api.get(endpoint, { params: filteredParams });
+      console.log('API response for searchCompanies:', response.data);
+      // Assuming the backend returns an array of company objects directly
+      // Adjust if your backend returns data in a different structure (e.g., { results: [...] })
+      return response.data as Company[];
+    } catch (error) {
+      console.error('API error in searchCompanies:', error);
+      throw error; // Re-throw to be caught by the component
+    }
   },
 };
 
