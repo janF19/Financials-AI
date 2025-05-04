@@ -34,14 +34,24 @@ export const fetchReportById = createAsyncThunk(
 
 export const downloadReport = createAsyncThunk(
   'reports/downloadReport',
-  async (id: string, { rejectWithValue }) => {
+  async (id: string, { rejectWithValue, dispatch }) => {
     try {
       console.log(`Starting download for report ${id}`);
-      const blob = await reportService.downloadReport(id);
-      console.log(`Got blob response:`, blob);
+      
+      // Set a loading state that can be used to disable/enable the download button
+      dispatch({ type: 'reports/setDownloadingId', payload: id });
+      
+      const response = await reportService.downloadReport(id);
+      console.log(`Got response:`, response);
+      
+      // Check if the response is actually a blob
+      if (!(response instanceof Blob)) {
+        console.error('Response is not a Blob:', response);
+        throw new Error('Invalid response format');
+      }
       
       // Create a URL for the blob
-      const url = window.URL.createObjectURL(blob);
+      const url = window.URL.createObjectURL(response);
       console.log(`Created URL: ${url}`);
       
       // Create a temporary link and trigger download
@@ -53,16 +63,22 @@ export const downloadReport = createAsyncThunk(
       link.click();
       
       // Clean up
-      window.URL.revokeObjectURL(url);
-      link.remove();
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        link.remove();
+        console.log('Download cleanup completed');
+      }, 100);
       
       return id;
     } catch (error: any) {
       console.error('Download error:', error);
       return rejectWithValue(
-        error.response?.data?.detail || 
+        error.response?.data?.detail || error.message || 
         'Failed to download report. Please try again later.'
       );
+    } finally {
+      // Clear the downloading state
+      dispatch({ type: 'reports/setDownloadingId', payload: null });
     }
   }
 );
@@ -85,6 +101,7 @@ const initialState: ReportsState = {
   isLoading: false,
   error: null,
   totalCount: 0,
+  downloadingId: null,
 };
 
 const reportSlice = createSlice({
@@ -96,6 +113,9 @@ const reportSlice = createSlice({
     },
     clearError(state) {
       state.error = null;
+    },
+    setDownloadingId(state, action) {
+      state.downloadingId = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -132,12 +152,14 @@ const reportSlice = createSlice({
       
       // Download report cases
       .addCase(downloadReport.pending, (state) => {
-        // Don't set isLoading as it might disrupt UI
+        // We're now handling loading state via setDownloadingId
       })
       .addCase(downloadReport.fulfilled, (state) => {
+        state.downloadingId = null;
         toast.success('Report downloaded successfully');
       })
       .addCase(downloadReport.rejected, (state, action) => {
+        state.downloadingId = null;
         state.error = action.payload as string;
         toast.error(action.payload as string);
       })
@@ -159,5 +181,5 @@ const reportSlice = createSlice({
   },
 });
 
-export const { clearCurrentReport, clearError } = reportSlice.actions;
+export const { clearCurrentReport, clearError, setDownloadingId } = reportSlice.actions;
 export default reportSlice.reducer;

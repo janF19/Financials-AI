@@ -114,12 +114,13 @@ const SearchPage: React.FC = () => {
       };
   };
 
-  // Helper component for consistent label-value display (optional, can be inlined)
+  // Helper component for consistent label-value display
   const LabelValue = ({ label, value, isBoldValue = false }: { label: string, value?: string | null, isBoldValue?: boolean }) => {
-    if (!value) return null; // Don't render if value is empty or null
+    if (!value) return null;
     return (
-      <Box sx={{ display: 'flex', mb: 0.5, alignItems: 'baseline' }}>
-        <Typography variant="body2" color="text.secondary" sx={{ width: '130px', flexShrink: 0, pr: 1 }}> {/* Adjust width as needed */}
+      // Keep the internal flex display for label/value alignment
+      <Box sx={{ display: 'flex', mb: 1, alignItems: 'baseline' }}>
+        <Typography variant="body2" color="text.secondary" sx={{ width: '130px', flexShrink: 0, pr: 1 }}>
           {label}:
         </Typography>
         <Typography variant="body2" fontWeight={isBoldValue ? 'bold' : 'regular'}>
@@ -262,7 +263,7 @@ const SearchPage: React.FC = () => {
 
       {/* Search Results */}
       {!isLoading && !error && lastSearchType && searchResults.length > 0 && (
-        <Box sx={{ mt: 4 }}> {/* Add margin top to separate from forms */}
+        <Box sx={{ mt: 4 }}>
           {/* Results Header */}
           <Paper elevation={1} sx={{ bgcolor: 'success.dark', color: 'white', p: 2, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -273,48 +274,56 @@ const SearchPage: React.FC = () => {
              </Box>
           </Paper>
 
-          {/* Results List - Remove the outer Grid container */}
-          <Box sx={{ border: '1px solid', borderColor: 'divider', borderTop: 'none' }}> {/* Add border around the list */}
+          {/* Results List */}
+          <Box sx={{ border: '1px solid', borderColor: 'divider', borderTop: 'none' }}>
             {searchResults.map((company: Company, index: number) => {
               const { fileNumber, court } = parseFileReference(company.file_reference);
               const isLastItem = index === searchResults.length - 1;
 
               return (
-                // Container for a single company result row
-                <Box key={company.id} sx={{ px: 2, py: 2 }}> {/* Padding inside the row */}
+                <Box key={company.id} sx={{ px: 2, py: 2 }}>
+                  {/* Revert to the two-column Grid structure */}
                   <Grid container spacing={2}>
-                    {/* Left Column */}
+                    {/* Left Column (Default Alignment - Left) */}
                     <Grid item xs={12} md={6}>
-                      {/* Person Info (if applicable) */}
+                      {/* Person Info Block */}
                       {lastSearchType === 'person' && company.person && (
-                        <>
+                        <Box sx={{ mb: 2 }}>
                           <LabelValue label="Jméno" value={company.person.full_name} isBoldValue/>
                           <LabelValue label="Adresa" value={company.person.address} />
-                          <Box sx={{height: '1em'}} /> {/* Spacer */}
-                        </>
+                        </Box>
                       )}
-                      {/* Company Info */}
-                      <LabelValue label="Název subjektu" value={company.company_name} isBoldValue={!company.person} />
-                      <LabelValue label="Spisová značka" value={fileNumber ? `${fileNumber} ${court ? `vedená u ${court}` : ''}`: null} />
+                      {/* Company Info Block */}
+                      <Box>
+                        <LabelValue label="Název subjektu" value={company.company_name} isBoldValue={!company.person} />
+                        <LabelValue label="Spisová značka" value={fileNumber ? `${fileNumber} ${court ? `vedená u ${court}` : ''}`: null} />
+                      </Box>
                     </Grid>
 
-                    {/* Right Column */}
-                    <Grid item xs={12} md={6}>
-                      {/* Person Info (if applicable) */}
+                    {/* Right Column - Apply Flexbox alignment */}
+                    <Grid item xs={12} md={6} sx={{
+                      display: 'flex', // Make the Grid item a flex container
+                      flexDirection: 'column', // Stack children vertically
+                      alignItems: 'flex-end' // Align children (the Boxes) to the right
+                    }}>
+                      {/* Person Info Block */}
                       {lastSearchType === 'person' && company.person && (
-                        <>
+                        // This Box will now be aligned to the right
+                        <Box sx={{ mb: 2, width: 'fit-content' }}> {/* width: fit-content helps alignment */}
                           <LabelValue label="Datum narození" value={company.person.birth_date} isBoldValue/>
                           <LabelValue label="Angažmá" value={company.person.role} />
-                           <Box sx={{height: '1em'}} /> {/* Spacer */}
-                        </>
+                        </Box>
                       )}
-                      {/* Company Info */}
-                      <LabelValue label="IČO" value={company.ico} isBoldValue />
-                      <LabelValue label="Den zápisu" value={company.registration_date} />
+                      {/* Company Info Block */}
+                       // This Box will now be aligned to the right
+                      <Box sx={{ width: 'fit-content' }}> {/* width: fit-content helps alignment */}
+                        <LabelValue label="IČO" value={company.ico} isBoldValue />
+                        <LabelValue label="Den zápisu" value={company.registration_date} />
+                      </Box>
                     </Grid>
                   </Grid>
 
-                  {/* Valuation Button - Placed below the grid */}
+                  {/* Valuation Button */}
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
                     <Button
                       variant="contained"
@@ -327,12 +336,12 @@ const SearchPage: React.FC = () => {
                     </Button>
                   </Box>
 
-                  {/* Divider between items */}
+                  {/* Divider */}
                   {!isLastItem && <Divider sx={{ mt: 2 }} />}
                 </Box>
               );
             })}
-          </Box> {/* End of border box */}
+          </Box>
         </Box>
       )}
 

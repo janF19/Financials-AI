@@ -65,11 +65,11 @@ const safeFormatDate = (dateString: string | null | undefined) => {
 
 const Reports = () => {
   const dispatch = useAppDispatch();
-  const { reports = [], totalCount = 0, isLoading, error } = useAppSelector((state) => state.reports);
+  const { reports = [], totalCount = 0, isLoading, error, downloadingId } = useAppSelector((state) => state.reports);
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [statusFilter, setStatusFilter] = useState<string>(''); // 'all', 'processing', 'completed', 'failed'
+  const [statusFilter, setStatusFilter] = useState<string>(''); // 'all', 'pending', 'processed', 'failed'
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<Report | null>(null);
 
@@ -143,10 +143,10 @@ const Reports = () => {
 
   const getStatusChip = (status: string) => {
     switch (status) {
-      case 'completed':
-        return <Chip size="small" label="Completed" color="success" />;
-      case 'processing':
-        return <Chip size="small" label="Processing" color="warning" />;
+      case 'processed':
+        return <Chip size="small" label="processed" color="success" />;
+      case 'pending':
+        return <Chip size="small" label="pending" color="warning" />;
       case 'failed':
         return <Chip size="small" label="Failed" color="error" />;
       default:
@@ -177,8 +177,8 @@ const Reports = () => {
              onChange={handleStatusFilterChange}
            >
              <MenuItem value="all">All Statuses</MenuItem>
-             <MenuItem value="processing">Processing</MenuItem>
-             <MenuItem value="completed">Completed</MenuItem>
+             <MenuItem value="pending">pending</MenuItem>
+             <MenuItem value="processed">processed</MenuItem>
              <MenuItem value="failed">Failed</MenuItem>
            </Select>
          </FormControl>
@@ -229,14 +229,14 @@ const Reports = () => {
                       {safeFormatDate(report.updated_at)}
                     </TableCell>
                     <TableCell align="right">
-                      <Tooltip title="Download Report">
+                      <Tooltip title={report.status !== 'processed' ? 'Report must be processed to download' : 'Download Report'}>
                         <span>
                           <IconButton
                             onClick={() => handleDownload(report.id)}
-                            disabled={report.status !== 'completed'}
+                            disabled={report.status !== 'processed' || downloadingId === report.id}
                             color="primary"
                           >
-                            <DownloadIcon />
+                            {downloadingId === report.id ? <CircularProgress size={24} /> : <DownloadIcon />}
                           </IconButton>
                         </span>
                       </Tooltip>

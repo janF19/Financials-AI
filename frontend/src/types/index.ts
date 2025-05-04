@@ -34,7 +34,7 @@ export interface User {
   export interface Report {
     id: string;
     file_name: string;
-    status: 'processing' | 'completed' | 'failed';
+    status: 'pending' | 'processed' | 'failed';
     created_at: string;
     updated_at: string;
     download_url?: string;
@@ -139,4 +139,8 @@ export interface User {
     lastSearchType: 'person' | 'company' | 'ico' | null; // To know which search was last run
   }
 
-    
+  
+  export interface ReportsState {
+    // ... existing properties
+    downloadingId: string | null;
+  }

@@ -153,9 +153,14 @@ const Dashboard = () => {
             <StatusChart summary={summary} />
             
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 'auto', pt: 2 }}>
-              <Button variant="contained" onClick={handleUploadClick}>
-                Upload New
-              </Button>
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <Button variant="contained" onClick={handleUploadClick}>
+                  Upload New
+                </Button>
+                <Button variant="contained" color="secondary" onClick={() => navigate('/search')}>
+                  Search
+                </Button>
+              </Box>
               <Button variant="outlined" onClick={handleViewReportsClick}>
                 View All Reports
               </Button>
