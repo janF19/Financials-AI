@@ -96,7 +96,7 @@ const Reports = () => {
 
   useEffect(() => {
     // When reports are loaded
-    console.log("Reports with statuses:", reports.map(r => ({ id: r.id, status: r.status })));
+    console.log("Reports with statuses:", reports.map((r: Report) => ({ id: r.id, status: r.status })));
   }, [reports]);
 
   const handleChangePage = (event: unknown, newPage: number) => {
@@ -218,7 +218,7 @@ const Reports = () => {
                  </TableRow>
               )}
               {!isLoading &&
-                reports.map((report) => (
+                reports.map((report: Report) => (
                   <TableRow hover key={report.id}>
                     <TableCell>{report.file_name}</TableCell>
                     <TableCell>{getStatusChip(report.status)}</TableCell>

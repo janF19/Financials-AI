@@ -78,23 +78,65 @@ export interface User {
     error: string | null;
   }
 
-  export interface Company {
-    id: string; // Assuming the backend provides an ID
-    name: string;
-    ico: string;
-    description?: string; // Optional based on your example
-    registration_date?: string; // Match backend snake_case if applicable
+  
+  
+
+// --- Search Related Types ---
+
+  export interface PersonInfo {
+    full_name: string;
+    birth_date?: string;
+    birth_date_iso?: string;
     address?: string;
-    file_number?: string;
-    court?: string;
-    // Add any other relevant fields from your backend API
+    role?: string;
   }
-  
+
+  // Frontend representation of a company, aligning with backend CompanyInfo
+  export interface Company {
+    // Using backend field names directly for simplicity
+    company_name: string;
+    ico: string; // Keep as string since backend uses it as dict key
+    file_reference?: string; // Maps to file_number/court display
+    registration_date?: string;
+    registration_date_iso?: string;
+    person?: PersonInfo; // Included if searching by person
+    // Frontend specific fields (optional)
+    id: string; // Use ICO as the unique ID on the frontend
+    description?: string; // You might want to add this if needed for display
+    address?: string; // Add address if it's directly on CompanyInfo or derived
+    court?: string; // Add court if derived from file_reference
+  }
+
+  // Parameters for the search API call
   export interface SearchParams {
-    person_name?: string;
+    first_name?: string; // Changed from person_name
+    last_name?: string;  // Added for person search
     company_name?: string;
-    ico?: string;
-  } 
-  
-  
-  
+    ico?: string; // Keep as string for consistency
+  }
+
+  // Structure of the response from /search/person and /search/company
+  export interface CompanySearchResponse {
+    companies: { [key: string]: Company }; // Dictionary keyed by ICO
+    count: number;
+  }
+
+  // Structure for the valuation trigger response
+  export interface ValuationResponse {
+      status: string;
+      report_id: string;
+      message: string;
+  }
+
+  // --- Search Redux Slice State ---
+  export interface SearchState {
+    companies: Company[];
+    isLoading: boolean;
+    error: string | null;
+    valuationStatus: 'idle' | 'pending' | 'success' | 'error';
+    valuationReportId: string | null;
+    valuationError: string | null;
+    lastSearchType: 'person' | 'company' | 'ico' | null; // To know which search was last run
+  }
+
+    
