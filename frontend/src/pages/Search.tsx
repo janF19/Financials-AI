@@ -16,7 +16,8 @@ import {
   DialogContentText,
   DialogTitle,
   Paper,
-  Snackbar
+  Snackbar,
+  Divider
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import { useAppDispatch, useAppSelector } from '../hooks/redux'; // Use Redux hooks
@@ -113,6 +114,21 @@ const SearchPage: React.FC = () => {
       };
   };
 
+  // Helper component for consistent label-value display (optional, can be inlined)
+  const LabelValue = ({ label, value, isBoldValue = false }: { label: string, value?: string | null, isBoldValue?: boolean }) => {
+    if (!value) return null; // Don't render if value is empty or null
+    return (
+      <Box sx={{ display: 'flex', mb: 0.5, alignItems: 'baseline' }}>
+        <Typography variant="body2" color="text.secondary" sx={{ width: '130px', flexShrink: 0, pr: 1 }}> {/* Adjust width as needed */}
+          {label}:
+        </Typography>
+        <Typography variant="body2" fontWeight={isBoldValue ? 'bold' : 'regular'}>
+          {value}
+        </Typography>
+      </Box>
+    );
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
@@ -125,12 +141,12 @@ const SearchPage: React.FC = () => {
       <Paper elevation={2} sx={{ p: 3, mb: 4 }}>
         <Grid container spacing={3}>
           {/* Search by Person Name */}
-          <Grid item xs={12}>
+          <Grid xs={12}>
             <Typography variant="body1" gutterBottom>
               Search company based on participation by person name:
             </Typography>
             <Grid container spacing={2} alignItems="center">
-                 <Grid item xs={12} sm={5}>
+                 <Grid xs={12} sm={5}>
                      <TextField
                         fullWidth
                         label="First Name"
@@ -141,7 +157,7 @@ const SearchPage: React.FC = () => {
                         size="small"
                      />
                  </Grid>
-                 <Grid item xs={12} sm={5}>
+                 <Grid xs={12} sm={5}>
                      <TextField
                         fullWidth
                         label="Last Name"
@@ -152,7 +168,7 @@ const SearchPage: React.FC = () => {
                         size="small"
                      />
                  </Grid>
-                 <Grid item xs={12} sm={2}>
+                 <Grid xs={12} sm={2}>
                     <Button
                         fullWidth
                         variant="contained"
@@ -167,7 +183,7 @@ const SearchPage: React.FC = () => {
           </Grid>
 
           {/* Search by Company Name */}
-          <Grid item xs={12}>
+          <Grid xs={12}>
             <Typography variant="body1" gutterBottom>
               Search company based on name:
             </Typography>
@@ -245,10 +261,10 @@ const SearchPage: React.FC = () => {
       )}
 
       {/* Search Results */}
-      {/* Show results only if not loading, no error, and a search has been performed (lastSearchType is set) */}
       {!isLoading && !error && lastSearchType && searchResults.length > 0 && (
-        <Box>
-          <Paper elevation={1} sx={{ bgcolor: 'success.dark', color: 'white', p: 2, mb: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
+        <Box sx={{ mt: 4 }}> {/* Add margin top to separate from forms */}
+          {/* Results Header */}
+          <Paper elevation={1} sx={{ bgcolor: 'success.dark', color: 'white', p: 2, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Typography variant="h6">
                     Search Results: {searchResults.length} compan{searchResults.length === 1 ? 'y' : 'ies'} found
@@ -256,80 +272,67 @@ const SearchPage: React.FC = () => {
                 <Typography variant="caption">Data retrieved {new Date().toLocaleTimeString()}</Typography>
              </Box>
           </Paper>
-          <Grid container spacing={0}>
-            {searchResults.map((company: Company) => {
+
+          {/* Results List - Remove the outer Grid container */}
+          <Box sx={{ border: '1px solid', borderColor: 'divider', borderTop: 'none' }}> {/* Add border around the list */}
+            {searchResults.map((company: Company, index: number) => {
               const { fileNumber, court } = parseFileReference(company.file_reference);
+              const isLastItem = index === searchResults.length - 1;
+
               return (
-                <Grid item xs={12} key={company.id}> {/* Use company.id (which is ICO) as key */}
-                  <Card sx={{ mb: 0, borderRadius: 0, borderTop: 'none', border: '1px solid', borderColor: 'divider' }}>
-                    <CardContent>
-                      <Grid container spacing={2}>
-                        {/* Left Column: Main Info */}
-                        <Grid item xs={12} md={7}>
-                          <Typography variant="h6" component="div" gutterBottom>
-                            {company.company_name}
-                          </Typography>
-                          {/* Display Person Info if available (from person search) */}
-                          {lastSearchType === 'person' && company.person && (
-                             <Box sx={{ mb: 2, p: 1.5, bgcolor: 'grey.100', borderRadius: 1 }}>
-                                <Typography variant="body2" fontWeight="medium" gutterBottom>Associated Person:</Typography>
-                                <Typography variant="body2"><strong>Name:</strong> {company.person.full_name}</Typography>
-                                {company.person.role && <Typography variant="body2"><strong>Role:</strong> {company.person.role}</Typography>}
-                                {company.person.birth_date && <Typography variant="body2"><strong>Born:</strong> {company.person.birth_date}</Typography>}
-                                {company.person.address && <Typography variant="body2"><strong>Address:</strong> {company.person.address}</Typography>}
-                             </Box>
-                          )}
-                          {/* File Number and Address */}
-                          <Grid container spacing={1} sx={{ fontSize: '0.875rem' }}>
-                            {fileNumber && (
-                              <>
-                                <Grid item xs={4} sm={3}><Typography variant="body2" fontWeight="medium">File number:</Typography></Grid>
-                                <Grid item xs={8} sm={9}><Typography variant="body2">{fileNumber} {court ? `vedená u ${court}` : ''}</Typography></Grid>
-                              </>
-                            )}
-                            {/* Assuming address might be on company object directly or derived */}
-                            {/* {company.address && (
-                              <>
-                                <Grid item xs={4} sm={3}><Typography variant="body2" fontWeight="medium">Address:</Typography></Grid>
-                                <Grid item xs={8} sm={9}><Typography variant="body2">{company.address}</Typography></Grid>
-                              </>
-                            )} */}
-                          </Grid>
-                        </Grid>
-                        {/* Right Column: ICO and Dates */}
-                        <Grid item xs={12} md={5}>
-                           <Grid container spacing={1} sx={{ fontSize: '0.875rem' }}>
-                             {company.ico && (
-                               <>
-                                 <Grid item xs={5} sm={4}><Typography variant="body2" fontWeight="medium">IČO:</Typography></Grid>
-                                 <Grid item xs={7} sm={8}><Typography variant="body2" fontWeight="bold">{company.ico}</Typography></Grid>
-                               </>
-                             )}
-                             {company.registration_date && (
-                               <>
-                                 <Grid item xs={5} sm={4}><Typography variant="body2" fontWeight="medium">Registration:</Typography></Grid>
-                                 <Grid item xs={7} sm={8}><Typography variant="body2">{company.registration_date}</Typography></Grid>
-                               </>
-                             )}
-                           </Grid>
-                        </Grid>
-                      </Grid>
-                    </CardContent>
-                    <CardActions sx={{ justifyContent: 'flex-end', bgcolor: 'action.hover', p: 2 }}>
-                      <Button
-                        variant="contained"
-                        color="success"
-                        onClick={() => handleValuationSelect(company)}
-                        disabled={valuationStatus === 'pending'} // Disable while valuation is pending
-                      >
-                        Choose this company for valuation
-                      </Button>
-                    </CardActions>
-                  </Card>
-                </Grid>
+                // Container for a single company result row
+                <Box key={company.id} sx={{ px: 2, py: 2 }}> {/* Padding inside the row */}
+                  <Grid container spacing={2}>
+                    {/* Left Column */}
+                    <Grid item xs={12} md={6}>
+                      {/* Person Info (if applicable) */}
+                      {lastSearchType === 'person' && company.person && (
+                        <>
+                          <LabelValue label="Jméno" value={company.person.full_name} isBoldValue/>
+                          <LabelValue label="Adresa" value={company.person.address} />
+                          <Box sx={{height: '1em'}} /> {/* Spacer */}
+                        </>
+                      )}
+                      {/* Company Info */}
+                      <LabelValue label="Název subjektu" value={company.company_name} isBoldValue={!company.person} />
+                      <LabelValue label="Spisová značka" value={fileNumber ? `${fileNumber} ${court ? `vedená u ${court}` : ''}`: null} />
+                    </Grid>
+
+                    {/* Right Column */}
+                    <Grid item xs={12} md={6}>
+                      {/* Person Info (if applicable) */}
+                      {lastSearchType === 'person' && company.person && (
+                        <>
+                          <LabelValue label="Datum narození" value={company.person.birth_date} isBoldValue/>
+                          <LabelValue label="Angažmá" value={company.person.role} />
+                           <Box sx={{height: '1em'}} /> {/* Spacer */}
+                        </>
+                      )}
+                      {/* Company Info */}
+                      <LabelValue label="IČO" value={company.ico} isBoldValue />
+                      <LabelValue label="Den zápisu" value={company.registration_date} />
+                    </Grid>
+                  </Grid>
+
+                  {/* Valuation Button - Placed below the grid */}
+                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
+                    <Button
+                      variant="contained"
+                      color="success"
+                      size="small" // Make button smaller to fit better
+                      onClick={() => handleValuationSelect(company)}
+                      disabled={valuationStatus === 'pending'}
+                    >
+                      Choose this company for valuation
+                    </Button>
+                  </Box>
+
+                  {/* Divider between items */}
+                  {!isLastItem && <Divider sx={{ mt: 2 }} />}
+                </Box>
               );
             })}
-          </Grid>
+          </Box> {/* End of border box */}
         </Box>
       )}
 

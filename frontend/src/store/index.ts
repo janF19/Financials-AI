@@ -5,11 +5,11 @@ import storage from 'redux-persist/lib/storage';
 import { combineReducers } from 'redux';
 import { fetchCompanies, triggerValuation } from './slices/searchSlice';
 
-import authReducer, { AuthState } from './slices/authSlice';
-import reportReducer, { ReportsState } from './slices/reportSlice';
-import dashboardReducer, { DashboardState } from './slices/dashboardSlice';
-import uploadReducer, { UploadState } from './slices/uploadSlice';
-import searchReducer, { SearchState } from './slices/searchSlice';
+import authReducer from './slices/authSlice';
+import reportReducer from './slices/reportSlice';
+import dashboardReducer from './slices/dashboardSlice';
+import uploadReducer from './slices/uploadSlice';
+import searchReducer from './slices/searchSlice';
 
 const persistConfig = {
   key: 'root',

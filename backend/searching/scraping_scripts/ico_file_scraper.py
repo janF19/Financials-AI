@@ -71,7 +71,7 @@ class CzechIcoScraper: # Renamed class
     def _init_driver(self):
         """Initializes the Selenium WebDriver."""
         options = webdriver.ChromeOptions()
-        # options.add_argument('--headless') # Uncomment to run in background
+        options.add_argument('--headless=new')  # Use the new headless mode
         options.add_argument('--disable-gpu')
         options.add_argument('--window-size=1920x1080')
         options.add_argument('--no-sandbox') # Often needed in containerized environments

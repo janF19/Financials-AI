@@ -233,7 +233,7 @@ const Reports = () => {
                         <span>
                           <IconButton
                             onClick={() => handleDownload(report.id)}
-                            disabled={report.status !== 'processed'}
+                            disabled={report.status !== 'completed'}
                             color="primary"
                           >
                             <DownloadIcon />
