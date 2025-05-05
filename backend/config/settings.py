@@ -35,9 +35,13 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "60"))
 
+    # NEW: API Call Limit
+    USER_API_CALL_LIMIT_PER_MONTH: int = int(os.getenv("USER_API_CALL_LIMIT_PER_MONTH", 5)) # Default to 5
+
     class Config:
         env_file = ".env"
         case_sensitive = True
+        extra = 'ignore' # Ignore extra fields from environment variables
 
 
 settings = Settings()

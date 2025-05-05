@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
+from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Dict, Any
 import io
 import requests
@@ -17,12 +17,11 @@ from backend.models.search_models import CompanyInfo, CompanySearchByPersonRespo
 import json
 from backend.searching.scraping_scripts.ico_file_scraper import get_latest_financial_document
 from fastapi import BackgroundTasks
-from fastapi.responses import JSONResponse
 from pathlib import Path
 import uuid
-from pathlib import Path
 import os
 from backend.processors.workflow import ValuationWorkflow
+from backend.utils.usage_limiter import check_and_increment_api_usage
 
 logger = logging.getLogger(__name__)
 
@@ -226,137 +225,168 @@ async def get_company_by_ico(
 @router.post("/valuate")
 async def valuate_company_by_ico(
     background_tasks: BackgroundTasks,
-    ico: int, 
+    ico: int,
     current_user: User = Depends(get_current_user)
 ):
     """
-    Triggers scraping of specific company based on ICO, gets latest financials,
-    saves them to Supabase storage, and processes them to generate a valuation report.
-    
-    Returns a response with the report ID for tracking the process.
+    Triggers scraping for ICO, gets latest financials, saves them,
+    and processes them via workflow. Checks API usage limits first.
     """
-    
-    logger.info(f"Valuating company with ICO: {ico}")
-    
+    logger.info(f"Received valuation request for ICO: {ico} from user {current_user.id}")
+
+    # --- BEGIN RATE LIMIT CHECK ---
+    try:
+        check_and_increment_api_usage(current_user.id)
+    except HTTPException as http_exc:
+        raise http_exc
+    # --- END RATE LIMIT CHECK ---
+
+    temp_file_path = None # Initialize to None
     try:
         # Get the latest financial document
+        logger.info(f"Attempting to fetch financial document for ICO: {ico}")
         file_content, filename, year = get_latest_financial_document(ico)
-        
+
         if not file_content:
             logger.error(f"No financial document found for ICO: {ico}")
-            raise HTTPException(status_code=404, detail="No financial document found for this company")
-            
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No financial document found for this company")
+
         logger.info(f"Retrieved financial document for ICO: {ico}, filename: {filename}, year: {year}")
-        
-        # Check if the file is actually a PDF
+
+        # Basic PDF check (can be improved)
         if file_content[:4] != b'%PDF':
-            # First few bytes of a PDF file should be "%PDF"
-            logger.error(f"Downloaded file is not a valid PDF. First 20 bytes: {file_content[:20]}")
-            
-            # Save the content for debugging
-            debug_path = Path("backend/temp") / f"debug_{ico}_{uuid.uuid4()}.txt"
-            with open(debug_path, "wb") as f:
-                f.write(file_content)
-            
-            # Check if it's an HTML error page
-            if b'<html' in file_content.lower() or b'<!doctype html' in file_content.lower():
-                logger.error("Received HTML content instead of PDF. This might be an error page or login redirect.")
-                raise HTTPException(status_code=500, detail="The server returned an HTML page instead of a PDF document")
-            
-            raise HTTPException(status_code=500, detail="The downloaded file is not a valid PDF")
-            
+            logger.error(f"Downloaded file for ICO {ico} is not a valid PDF. Filename: {filename}")
+            # Consider saving for debug?
+            # debug_path = Path("backend/temp") / f"debug_{ico}_{uuid.uuid4()}.bin"
+            # debug_path.parent.mkdir(parents=True, exist_ok=True)
+            # with open(debug_path, "wb") as f:
+            #     f.write(file_content)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Downloaded financial document is not a valid PDF.")
+
         # Create a unique filename
         unique_filename = f"{uuid.uuid4()}_{filename}"
-        
-        # Use os.getenv directly as a fallback
-        temp_storage_path = os.getenv("TEMP_STORAGE_PATH", "backend/temp")
+        temp_storage_path = settings.TEMP_STORAGE_PATH # Use settings
         temp_file_path = Path(temp_storage_path) / unique_filename
-        
+
         # Save file temporarily
+        logger.info(f"Saving temporary file to: {temp_file_path}")
         temp_file_path.parent.mkdir(parents=True, exist_ok=True)
         with open(temp_file_path, "wb") as buffer:
             buffer.write(file_content)
-        
+
         # Create a pending report record
         report_id = str(uuid.uuid4())
         report_data = {
             "id": report_id,
             "user_id": str(current_user.id),
-            "file_name": filename,
-            "report_url": "",  # Will be updated after processing
+            "file_name": filename, # Use the original filename from scraping
+            "report_url": "",
             "status": "pending",
-            "original_file_path": str(temp_file_path)
-            # Removed fields that might not exist in the database schema
+            "original_file_path": str(temp_file_path),
+            "ico": str(ico) # Store the ICO for reference
         }
+        logger.info(f"Creating pending report record {report_id} for ICO {ico}")
         supabase.table("reports").insert(report_data).execute()
-        
+
         # Process the file in the background
+        logger.info(f"Adding background task for report {report_id}")
         background_tasks.add_task(
+            # Use the same task function as the financials endpoint
             process_financial_task,
             str(temp_file_path),
             str(current_user.id),
             report_id
         )
-        
+
         return JSONResponse(
-            status_code=202,  # Accepted
+            status_code=status.HTTP_202_ACCEPTED,
             content={
                 "status": "processing",
                 "report_id": report_id,
-                "message": "Financial document retrieved and being processed. Check the dashboard for updates in 10 seconds."
+                "message": "Financial document retrieved and processing started. Check the dashboard for updates."
             }
         )
-        
+
+    except HTTPException as http_exc:
+         # If an HTTPException occurred (404, 500, or 429 from check), clean up temp file if it was created
+        if temp_file_path and temp_file_path.exists():
+            try:
+                os.remove(temp_file_path)
+                logger.info(f"Cleaned up temp file {temp_file_path} after HTTPException.")
+            except OSError as rm_error:
+                logger.error(f"Error removing temp file {temp_file_path} after HTTPException: {rm_error}")
+        # Re-raise the original HTTPException
+        raise http_exc
+
     except Exception as e:
-        logger.error(f"Error in valuate_company_by_ico: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
-        
-   
-    
-    
-    
-    
-    
+        logger.error(f"Error during ICO valuation setup for ICO {ico}, user {current_user.id}: {e}", exc_info=True)
+         # Clean up temp file if created before the error
+        if temp_file_path and temp_file_path.exists():
+            try:
+                os.remove(temp_file_path)
+                logger.info(f"Cleaned up temp file {temp_file_path} after general exception.")
+            except OSError as rm_error:
+                logger.error(f"Error removing temp file {temp_file_path} after general exception: {rm_error}")
+        # Don't create a report record here, as the process failed before the task was added.
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred while initiating valuation: {str(e)}")
 
 
+# Make sure the process_financial_task function is defined in this file
+# or imported correctly if it lives elsewhere (like in financials.py)
+# If it's in financials.py, import it:
+# from backend.routes.financials import process_financial_task
+
+# Re-define or import process_financial_task here if needed
+# (Copied from financials.py for completeness, adjust if it lives elsewhere)
 def process_financial_task(file_path: str, user_id: str, report_id: str):
     """
     Background task to process financial PDF and update report status.
+    (Ensure this function is accessible, either defined here or imported)
     """
+    workflow_result = None # Initialize
     try:
         # Execute workflow
         workflow = ValuationWorkflow()
-        result = workflow.execute(file_path, user_id=user_id, report_id=report_id)
-        
-        # Update report record with results
-        update_data = {
-            "status": "processed"
-        }
-        
-        # Only add report_url if it exists in the result
-        if result and "report_url" in result:
-            update_data["report_url"] = result["report_url"]
-            
-        supabase.table("reports").update(update_data).eq("id", report_id).execute()
-        
-        # No need to clean up temp file here as workflow.execute already does it
-        
+        workflow_result = workflow.execute(file_path, user_id=user_id, report_id=report_id) # Store result
+
+        # Check workflow status before updating DB
+        if workflow_result and workflow_result.get("status") == "success":
+            update_data = {
+                "status": "processed",
+                "report_url": workflow_result.get("report_url", "") # Use get for safety
+            }
+            supabase.table("reports").update(update_data).eq("id", report_id).execute()
+            logger.info(f"Successfully processed report {report_id} for user {user_id}")
+        else:
+            # Workflow failed, update status and log error
+            error_msg = workflow_result.get("error_message", "Unknown processing error") if workflow_result else "Workflow execution failed"
+            error_category = workflow_result.get("error_category", "processing_error") if workflow_result else "unknown_error"
+            logger.error(f"Workflow failed for report {report_id}, user {user_id}. Category: {error_category}, Message: {error_msg}")
+            update_data = {
+                "status": "failed",
+                "error_message": f"{error_category}: {error_msg}"[:250] # Add error message, truncate if needed
+            }
+            supabase.table("reports").update(update_data).eq("id", report_id).execute()
+
+        # Workflow's execute method should handle cleanup of its own temp files (including original)
+
     except Exception as e:
-        # Update report with error status
+        # Catch exceptions during the task execution itself (outside workflow.execute)
+        logger.error(f"Critical error in background task for report {report_id}, user {user_id}: {e}", exc_info=True)
         try:
             update_data = {
-                "status": "failed"
-                # Removed error_message field that might not exist
+                "status": "failed",
+                "error_message": f"Background task error: {str(e)}"[:250] # Truncate if needed
             }
             supabase.table("reports").update(update_data).eq("id", report_id).execute()
         except Exception as db_error:
-            logger.error(f"Failed to update report status: {str(db_error)}")
-        
-        # Clean up temp file if it still exists
-        if os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except Exception as cleanup_error:
-                logger.error(f"Failed to clean up temp file: {str(cleanup_error)}")
-                
-        logger.error(f"Failed to process file: {str(e)}")
+             logger.error(f"Failed to update report {report_id} status to failed after task error: {db_error}")
+
+        # Attempt cleanup ONLY IF the workflow didn't run or failed early
+        if file_path and os.path.exists(file_path):
+             try:
+                 if not (workflow_result and workflow_result.get("status") == "success"):
+                     os.remove(file_path)
+                     logger.info(f"Cleaned up temp file {file_path} after task failure for report {report_id}")
+             except OSError as cleanup_error:
+                 logger.error(f"Failed to clean up temp file {file_path} after task failure for report {report_id}: {cleanup_error}")
