@@ -1,6 +1,8 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { searchService } from '../../services/api';
 import { Company, SearchParams, SearchState, ValuationResponse } from '../../types/index.ts'; // Adjust path if needed
+import { AxiosError } from 'axios'; // Import AxiosError
+import { toast } from 'react-toastify'; // Import toast
 
 // Async thunk for fetching companies
 export const fetchCompanies = createAsyncThunk(
@@ -14,8 +16,13 @@ export const fetchCompanies = createAsyncThunk(
       else if (params.company_name) type = 'company';
       else if (params.ico) type = 'ico';
       return { companies, type };
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || error.message || 'Failed to fetch companies');
+    } catch (error: unknown) { // Use unknown
+        if (error instanceof AxiosError && error.response) {
+            // Handle specific errors if needed, e.g., 404 Not Found
+            const message = error.response.data?.detail || error.message || 'Failed to fetch companies';
+            return rejectWithValue(message);
+        }
+        return rejectWithValue('An unexpected error occurred while searching.');
     }
   }
 );
@@ -27,8 +34,19 @@ export const triggerValuation = createAsyncThunk(
     try {
       const response = await searchService.valuateCompany(ico);
       return response; // Contains report_id, status, message
-    } catch (error: any) {
-      return rejectWithValue(error.response?.data?.detail || error.message || 'Failed to trigger valuation');
+    } catch (error: unknown) { // Use unknown
+      if (error instanceof AxiosError && error.response) {
+        // Specific handling for 429 Too Many Requests
+        if (error.response.status === 429) {
+          const message = error.response.data?.detail || 'You have reached your monthly valuation limit.';
+          return rejectWithValue(message);
+        }
+         // Handle other API errors (e.g., 404 if ICO financials not found, 500)
+        const message = error.response.data?.detail || error.message || 'Failed to trigger valuation';
+        return rejectWithValue(message);
+      }
+      // Handle non-API errors
+      return rejectWithValue('An unexpected error occurred during valuation request.');
     }
   }
 );
@@ -52,10 +70,10 @@ const searchSlice = createSlice({
       state.isLoading = false;
       state.error = null;
       state.lastSearchType = null;
-      // Optionally reset valuation state too, or handle separately
-      // state.valuationStatus = 'idle';
-      // state.valuationReportId = null;
-      // state.valuationError = null;
+      // Reset valuation state when clearing search
+      state.valuationStatus = 'idle';
+      state.valuationReportId = null;
+      state.valuationError = null;
     },
     resetValuationStatus: (state) => {
         state.valuationStatus = 'idle';
@@ -83,6 +101,8 @@ const searchSlice = createSlice({
       .addCase(fetchCompanies.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
+        // Optionally show a toast for search errors too
+        // toast.error(`Search failed: ${action.payload as string}`);
       })
       // Trigger Valuation
       .addCase(triggerValuation.pending, (state) => {
@@ -91,13 +111,16 @@ const searchSlice = createSlice({
         state.valuationReportId = null;
       })
       .addCase(triggerValuation.fulfilled, (state, action: PayloadAction<ValuationResponse>) => {
-        state.valuationStatus = 'success'; // Indicates the trigger was successful
+        state.valuationStatus = 'success'; // Indicates the trigger API call was accepted (202)
         state.valuationReportId = action.payload.report_id;
-        // You might store the message from payload if needed
+        // Show a success toast indicating processing has started
+        toast.success(action.payload.message || 'Valuation started. Check dashboard for updates.');
       })
       .addCase(triggerValuation.rejected, (state, action) => {
         state.valuationStatus = 'error';
         state.valuationError = action.payload as string;
+        // Show toast for valuation trigger failure (incl. 429)
+        toast.error(action.payload as string);
       });
   },
 });

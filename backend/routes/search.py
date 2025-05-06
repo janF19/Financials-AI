@@ -5,7 +5,7 @@ import io
 import requests
 from typing import List, Optional, Dict
 from uuid import UUID
-from backend.config import settings
+from backend.config.settings import settings
 from backend.models.user import User
 from backend.models.report import ReportResponse
 from backend.auth.dependencies import get_current_user
@@ -236,7 +236,7 @@ async def valuate_company_by_ico(
 
     # --- BEGIN RATE LIMIT CHECK ---
     try:
-        check_and_increment_api_usage(current_user.id)
+        check_and_increment_api_usage(current_user)
     except HTTPException as http_exc:
         raise http_exc
     # --- END RATE LIMIT CHECK ---
@@ -283,9 +283,9 @@ async def valuate_company_by_ico(
             "report_url": "",
             "status": "pending",
             "original_file_path": str(temp_file_path),
-            "ico": str(ico) # Store the ICO for reference
+            # "ico": str(ico) # <-- Simply comment out or delete this line
         }
-        logger.info(f"Creating pending report record {report_id} for ICO {ico}")
+        logger.info(f"Creating pending report record {report_id} (ICO {ico} not stored in DB)") # Optional: Modify log
         supabase.table("reports").insert(report_data).execute()
 
         # Process the file in the background

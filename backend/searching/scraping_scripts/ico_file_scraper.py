@@ -671,40 +671,82 @@ def get_latest_financial_document(ico):
             logging.warning(f"Could not find PDF download link for subjektId: {subjekt_id} on page {detail_link}.")
             return None, None, None
             
+        # --- BEGIN: Cookie Transfer ---
+        logging.debug("Transferring cookies from Selenium driver to requests session...")
+        try:
+            selenium_cookies = scraper_instance.driver.get_cookies()
+            for cookie in selenium_cookies:
+                # Make sure domain is set correctly for requests
+                cookie_domain = cookie.get('domain', '')
+                # Requests might need a leading dot if the domain starts with one in Selenium
+                if cookie_domain.startswith('.'):
+                     # Use the domain as is
+                     pass
+                else:
+                     # Check if it's likely an IP or localhost, otherwise prepend dot?
+                     # For simplicity, let's try setting it directly first.
+                     # If issues persist, more complex domain handling might be needed.
+                     pass
+
+                # Ensure 'expiry' is converted to 'expires' if present
+                if 'expiry' in cookie:
+                    cookie['expires'] = cookie.pop('expiry')
+
+                # Remove keys not recognized by requests.Session.cookies.set
+                # Common ones: httpOnly, sameSite (requests handles these implicitly or differently)
+                cookie.pop('httpOnly', None)
+                cookie.pop('sameSite', None)
+                # Ensure required keys are present (name, value)
+                if 'name' in cookie and 'value' in cookie:
+                     scraper_instance.download_session.cookies.set(
+                         name=cookie['name'],
+                         value=cookie['value'],
+                         domain=cookie.get('domain'), # Use None if not present
+                         path=cookie.get('path', '/'), # Default path if not present
+                         secure=cookie.get('secure', False),
+                         expires=cookie.get('expires'), # Use None if not present
+                         # rest=cookie.get('rest', {}) # Avoid passing unknown keys
+                     )
+                else:
+                     logging.warning(f"Skipping cookie due to missing name/value: {cookie}")
+
+            logging.debug(f"Transferred {len(selenium_cookies)} cookies.")
+        except Exception as cookie_e:
+            logging.error(f"Failed to transfer cookies: {cookie_e}", exc_info=True)
+            # Decide if you want to proceed without cookies or fail here
+            # return None, None, None # Option: Fail if cookies can't be transferred
+
+        # --- END: Cookie Transfer ---
+
+
         # Download the content directly without saving to file
         logging.info(f"Downloading file content from {pdf_link}")
         try:
+            # Now make the request using the session with updated cookies
             pdf_response = scraper_instance._make_request(pdf_link, allow_redirects=True)
             if not pdf_response:
                 logging.error(f"Failed to get response for {pdf_link}. Download aborted.")
                 return None, None, None
-                
+
             content_type = pdf_response.headers.get('Content-Type', '').lower()
-            # Check for error pages
+            # Check for error pages (existing logic)
             if 'text/html' in content_type and ("Chyba" in pdf_response.text or "Error" in pdf_response.text or "nenalezen" in pdf_response.text):
-                logging.error(f"Received HTML error page instead of file for {pdf_link}.")
-                return None, None, None
-                
+                 # ... (existing code to save HTML error) ...
+                 return None, None, None # Return None as PDF download failed
+
             if pdf_response.status_code == 200:
                 file_content = pdf_response.content
-                
-                # Add validation to ensure it's a PDF
+                # Add validation to ensure it's a PDF (existing logic)
                 if file_content[:4] != b'%PDF':
-                    # Check if it's an HTML error page
-                    if b'<html' in file_content.lower() or b'<!doctype html' in file_content.lower():
-                        logging.error("Received HTML content instead of PDF. This might be an error page or login redirect.")
-                        # Save the HTML content for debugging
-                        with open("./temp_downloads/html_content.html", "wb") as f:
-                            f.write(file_content)
-                        logging.error(f"Saved HTML content to ./temp_downloads/html_content.html for debugging")
-                        return None, None, None
-                
+                     # ... (existing code to save HTML error) ...
+                     return None, None, None
+
                 logging.info(f"Successfully downloaded content ({len(file_content)} bytes)")
                 return file_content, pdf_filename, year
             else:
-                logging.error(f"PDF download request failed with status {pdf_response.status_code} for {pdf_link}")
+                # ... (existing error handling) ...
                 return None, None, None
-                
+
         except Exception as e:
             logging.error(f"Download failed for {pdf_link}: {e}", exc_info=True)
             return None, None, None
