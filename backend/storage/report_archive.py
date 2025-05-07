@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 
-def save_report(user_id: str, report_path: Path, original_file_name: str, report_id: str = None) -> str:
+def save_report(user_id: str, report_path: Path, original_file_name: str, report_id: str = None, is_v2: bool = False) -> str:
     """
     Save a report to storage and create a database record.
     
@@ -27,6 +27,7 @@ def save_report(user_id: str, report_path: Path, original_file_name: str, report
         report_path: The path to the report file
         original_file_name: The original filename of the report
         report_id: Optional existing report ID to update instead of creating new
+        is_v2: Boolean indicating if this is a V2 report (for potential differentiation)
     
     Returns:
         The URL to the stored report in Supabase storage
@@ -34,13 +35,21 @@ def save_report(user_id: str, report_path: Path, original_file_name: str, report
     try:
         # Generate a unique filename with timestamp and user ID
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        report_filename = f"{user_id}_{timestamp}_{Path(report_path).name}"
+        version_prefix = "v2_" if is_v2 else ""
+        report_filename = f"{user_id}_{timestamp}_{version_prefix}{Path(report_path).name}"
+        
+        # Example: Differentiate storage path for V2 reports if needed
+        # storage_folder = f"{user_id}/v2_reports" if is_v2 else f"{user_id}"
+        # storage_path = f"{storage_folder}/{report_filename}"
+        # For now, keeping the same top-level user folder:
         storage_path = f"{user_id}/{report_filename}"
+        
+        logger.info(f"Attempting to save report. User: {user_id}, Path: {report_path}, Original: {original_file_name}, ReportID: {report_id}, IsV2: {is_v2}")
         
         # Upload to Supabase Storage
         with open(report_path, "rb") as file:
                 response = supabase.storage.from_(settings.STORAGE_BUCKET).upload(storage_path, file)
-                logger.info(f"Uploaded report to Supabase Storage: {response}")
+                logger.info(f"Uploaded report to Supabase Storage: {response}. Path: {storage_path}")
         
         # Get public URL
         report_url = supabase.storage.from_(settings.STORAGE_BUCKET).get_public_url(storage_path)
@@ -50,26 +59,34 @@ def save_report(user_id: str, report_path: Path, original_file_name: str, report
         if report_id:
             update_data = {
                 "report_url": report_url,
-                "status": "processed"
+                "status": "processed",
+                # Optionally, update a version field in the DB if you add one
+                # "report_version": "2.0" if is_v2 else "1.0" 
             }
             supabase.table("reports").update(update_data).eq("id", report_id).execute()
             logger.info(f"Updated existing report record: {report_id}")
         else:
             # Create record in reports table
-            report_data = ReportCreate(
-                user_id=user_id,
-                file_name=original_file_name,
-                report_url=report_url,
-                original_file_path=original_file_name,
-                status="processed"
-            )
+            report_data_dict = {
+                "user_id": user_id,
+                "file_name": original_file_name, # This is the original uploaded PDF/doc name
+                "report_url": report_url,
+                "original_file_path": original_file_name, # Consider if this should be the path of the input file to the workflow
+                "status": "processed",
+                # Optionally, add a version field
+                # "report_version": "2.0" if is_v2 else "1.0"
+            }
             
-            # Convert UUID to string for Supabase
-            report_dict = report_data.model_dump()
-            if isinstance(report_dict["user_id"], uuid.UUID):
-                report_dict["user_id"] = str(report_dict["user_id"])
+            # Convert UUID to string for Supabase if user_id is UUID
+            if isinstance(report_data_dict["user_id"], uuid.UUID):
+                report_data_dict["user_id"] = str(report_data_dict["user_id"])
             
-            supabase.table("reports").insert(report_dict).execute()
+            # Use ReportCreate model if you want validation, then dump to dict
+            # For simplicity here, constructing dict directly
+            # report_model_data = ReportCreate(**report_data_dict)
+            # supabase.table("reports").insert(report_model_data.model_dump()).execute()
+            
+            supabase.table("reports").insert(report_data_dict).execute()
             logger.info(f"Created database record for report: {report_url}")
             
         return report_url

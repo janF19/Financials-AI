@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse, JSONResponse
 from typing import Dict, Any
 import io
@@ -20,8 +20,9 @@ from fastapi import BackgroundTasks
 from pathlib import Path
 import uuid
 import os
-from backend.processors.workflow import ValuationWorkflow
+from backend.processors.workflow2 import ValuationWorkflow2
 from backend.utils.usage_limiter import check_and_increment_api_usage
+from backend.tasks import process_ico_valuation_task
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +225,6 @@ async def get_company_by_ico(
 
 @router.post("/valuate")
 async def valuate_company_by_ico(
-    background_tasks: BackgroundTasks,
     ico: int,
     current_user: User = Depends(get_current_user)
 ):
@@ -289,10 +289,8 @@ async def valuate_company_by_ico(
         supabase.table("reports").insert(report_data).execute()
 
         # Process the file in the background
-        logger.info(f"Adding background task for report {report_id}")
-        background_tasks.add_task(
-            # Use the same task function as the financials endpoint
-            process_financial_task,
+        logger.info(f"Adding Celery task process_ico_valuation_task for report {report_id}")
+        process_ico_valuation_task.delay(
             str(temp_file_path),
             str(current_user.id),
             report_id
@@ -329,64 +327,3 @@ async def valuate_company_by_ico(
                 logger.error(f"Error removing temp file {temp_file_path} after general exception: {rm_error}")
         # Don't create a report record here, as the process failed before the task was added.
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred while initiating valuation: {str(e)}")
-
-
-# Make sure the process_financial_task function is defined in this file
-# or imported correctly if it lives elsewhere (like in financials.py)
-# If it's in financials.py, import it:
-# from backend.routes.financials import process_financial_task
-
-# Re-define or import process_financial_task here if needed
-# (Copied from financials.py for completeness, adjust if it lives elsewhere)
-def process_financial_task(file_path: str, user_id: str, report_id: str):
-    """
-    Background task to process financial PDF and update report status.
-    (Ensure this function is accessible, either defined here or imported)
-    """
-    workflow_result = None # Initialize
-    try:
-        # Execute workflow
-        workflow = ValuationWorkflow()
-        workflow_result = workflow.execute(file_path, user_id=user_id, report_id=report_id) # Store result
-
-        # Check workflow status before updating DB
-        if workflow_result and workflow_result.get("status") == "success":
-            update_data = {
-                "status": "processed",
-                "report_url": workflow_result.get("report_url", "") # Use get for safety
-            }
-            supabase.table("reports").update(update_data).eq("id", report_id).execute()
-            logger.info(f"Successfully processed report {report_id} for user {user_id}")
-        else:
-            # Workflow failed, update status and log error
-            error_msg = workflow_result.get("error_message", "Unknown processing error") if workflow_result else "Workflow execution failed"
-            error_category = workflow_result.get("error_category", "processing_error") if workflow_result else "unknown_error"
-            logger.error(f"Workflow failed for report {report_id}, user {user_id}. Category: {error_category}, Message: {error_msg}")
-            update_data = {
-                "status": "failed",
-                "error_message": f"{error_category}: {error_msg}"[:250] # Add error message, truncate if needed
-            }
-            supabase.table("reports").update(update_data).eq("id", report_id).execute()
-
-        # Workflow's execute method should handle cleanup of its own temp files (including original)
-
-    except Exception as e:
-        # Catch exceptions during the task execution itself (outside workflow.execute)
-        logger.error(f"Critical error in background task for report {report_id}, user {user_id}: {e}", exc_info=True)
-        try:
-            update_data = {
-                "status": "failed",
-                "error_message": f"Background task error: {str(e)}"[:250] # Truncate if needed
-            }
-            supabase.table("reports").update(update_data).eq("id", report_id).execute()
-        except Exception as db_error:
-             logger.error(f"Failed to update report {report_id} status to failed after task error: {db_error}")
-
-        # Attempt cleanup ONLY IF the workflow didn't run or failed early
-        if file_path and os.path.exists(file_path):
-             try:
-                 if not (workflow_result and workflow_result.get("status") == "success"):
-                     os.remove(file_path)
-                     logger.info(f"Cleaned up temp file {file_path} after task failure for report {report_id}")
-             except OSError as cleanup_error:
-                 logger.error(f"Failed to clean up temp file {file_path} after task failure for report {report_id}: {cleanup_error}")

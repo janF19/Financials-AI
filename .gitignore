@@ -29,3 +29,8 @@ frontend/node_modules
 docs.txt
 
 backend/processors/financials/extractor_old.py
+
+
+backend/temp/
+
+test_workflow_v2_output

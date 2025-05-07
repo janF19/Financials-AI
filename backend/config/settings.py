@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     # NEW: API Call Limit
     USER_API_CALL_LIMIT_PER_MONTH: int = int(os.getenv("USER_API_CALL_LIMIT_PER_MONTH", 5)) # Default to 5
 
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    JWT_SECRET: str = os.getenv("JWT_SECRET", "your_jwt_secret")
+    REPORT_ARCHIVE_PATH: str = os.getenv("REPORT_ARCHIVE_PATH", "backend/storage/archived_reports")
+    MAX_API_CALLS_PER_MONTH: int = int(os.getenv("MAX_API_CALLS_PER_MONTH", 100))
+
+    CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+
     class Config:
         env_file = ".env"
         case_sensitive = True

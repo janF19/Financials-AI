@@ -16,3 +16,4 @@ python_jose==3.4.0
 Requests==2.32.3
 supabase==2.15.0
 uvicorn==0.34.0
+celery[redis]==5.3.6
