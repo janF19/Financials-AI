@@ -1,5 +1,6 @@
 import os
 import logging
+from typing import Optional
 from backend.celery_app import celery_app
 from backend.processors.workflow import ValuationWorkflow # For financials endpoint
 from backend.processors.workflow2 import ValuationWorkflow2 # For search/valuate endpoint
@@ -30,7 +31,7 @@ def process_uploaded_financials_task(file_path: str, user_id: str, report_id: st
     logger.info(f"Celery task process_uploaded_financials_task started for report {report_id}, user {user_id}, file {file_path}")
     workflow_result = None
     try:
-        workflow = ValuationWorkflow()
+        workflow = ValuationWorkflow2()
         workflow_result = workflow.execute(file_path, user_id=user_id, report_id=report_id)
 
         if workflow_result and workflow_result.get("status") == "success":
@@ -50,14 +51,14 @@ def process_uploaded_financials_task(file_path: str, user_id: str, report_id: st
         _update_report_status(report_id, "failed", error_message=f"Celery task error: {str(e)}")
         
         # Fallback cleanup if workflow.execute didn't run or crashed before its own cleanup
+        # This file_path is the temporary file created by the calling route (e.g., /financials/upload)
+        # and should be cleaned up by this task after processing.
         if file_path and os.path.exists(file_path):
             try:
-                # Only remove if workflow didn't succeed (as it should clean up its own input on success)
-                if not (workflow_result and workflow_result.get("status") == "success"):
-                    os.remove(file_path)
-                    logger.info(f"Cleaned up temp file {file_path} after task failure for report {report_id} (uploaded PDF).")
+                os.remove(file_path)
+                logger.info(f"Cleaned up input temp file {file_path} for report {report_id} (uploaded PDF) after task completion/failure.")
             except OSError as cleanup_error:
-                logger.error(f"Failed to clean up temp file {file_path} after task failure for report {report_id}: {cleanup_error}")
+                logger.error(f"Failed to clean up input temp file {file_path} for report {report_id} (uploaded PDF): {cleanup_error}")
 
 
 @celery_app.task(name="process_ico_sourced_valuation")
@@ -86,12 +87,12 @@ def process_ico_valuation_task(file_path: str, user_id: str, report_id: str):
     except Exception as e:
         logger.error(f"Critical error in Celery task process_ico_valuation_task for report {report_id}: {e}", exc_info=True)
         _update_report_status(report_id, "failed", error_message=f"Celery task error: {str(e)}")
-
-        # Fallback cleanup if workflow.execute didn't run or crashed before its own cleanup
+    finally: # Ensure cleanup happens whether success or failure of workflow
+        # This file_path is the temporary file created by the /search/valuate route
+        # and should be cleaned up by this task after processing.
         if file_path and os.path.exists(file_path):
             try:
-                if not (workflow_result and workflow_result.get("status") == "success"):
-                    os.remove(file_path)
-                    logger.info(f"Cleaned up temp file {file_path} after task failure for report {report_id} (ICO sourced).")
+                os.remove(file_path)
+                logger.info(f"Cleaned up input temp file {file_path} for report {report_id} (ICO sourced) after task completion/failure.")
             except OSError as cleanup_error:
-                logger.error(f"Failed to clean up temp file {file_path} after task failure for report {report_id}: {cleanup_error}") 
+                logger.error(f"Failed to clean up input temp file {file_path} for report {report_id} (ICO sourced): {cleanup_error}") 

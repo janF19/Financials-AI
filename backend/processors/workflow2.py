@@ -8,6 +8,7 @@ from backend.config.settings import settings
 import json
 import os
 import uuid
+import shutil
 from backend.storage.report_archive import save_report, cleanup_temp_file
 
 logging.basicConfig(
@@ -27,20 +28,13 @@ class ValuationWorkflow2:
 
     def _cleanup_temp_dir(self):
         if self.temp_dir_path.exists():
-            for item in self.temp_dir_path.iterdir():
-                try:
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        # shutil.rmtree(item) # If you need to remove subdirectories
-                        pass # For now, only removing files in the top temp_dir
-                except Exception as e:
-                    logger.error(f"Error cleaning up temp item {item}: {e}")
             try:
-                self.temp_dir_path.rmdir() # Remove the temp_dir itself if empty
-                logger.info(f"Successfully cleaned up temporary directory: {self.temp_dir_path}")
-            except OSError as e: # Directory not empty
-                logger.warning(f"Could not remove temporary directory {self.temp_dir_path} as it might not be empty: {e}")
+                shutil.rmtree(self.temp_dir_path) # Use shutil.rmtree for robust directory removal
+                logger.info(f"Successfully removed temporary directory tree: {self.temp_dir_path}")
+            except Exception as e: # shutil.rmtree can raise OSError, e.g., if a file is in use or permissions issue
+                logger.error(f"Error removing temporary directory tree {self.temp_dir_path}: {e}", exc_info=True)
+        else:
+            logger.info(f"Temporary directory {self.temp_dir_path} does not exist, no cleanup needed.")
 
 
     def execute(self, file_path: str, user_id: str = None, report_id: str = None, output_path: str = None):

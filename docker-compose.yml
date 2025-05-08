@@ -8,5 +8,72 @@ services:
     volumes:
       - redis_data:/data
 
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app/backend
+      - ./data/temp:/app/backend/temp
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - API_HOST=0.0.0.0
+      - TEMP_STORAGE_PATH=/app/backend/temp
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m celery -A backend.celery_app.celery_app worker -l info --pool=solo
+    volumes:
+      - ./backend:/app/backend
+      - ./data/temp:/app/backend/temp
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TEMP_STORAGE_PATH=/app/backend/temp
+    depends_on:
+      - redis
+
+  frontend:
+    build:
+      context: ./frontend # Path to your frontend directory
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173" # Map host port 3000 to container port 3000 (adjust if your frontend uses a different port)
+    volumes:
+      - ./frontend:/app # Mount your local frontend code into the container for hot-reloading
+      - /app/node_modules # Anonymous volume to prevent local node_modules from overwriting container's node_modules
+    environment:
+      # If your frontend needs to know the backend URL, you can set it here.
+      # Example for a React app using Vite, it might look for VITE_API_URL:
+      # - VITE_API_URL=http://localhost:8000/api 
+      # Ensure your frontend code uses this environment variable.
+      # For Next.js, it might be NEXT_PUBLIC_API_URL.
+      - NODE_ENV=development # Ensures development mode for some frameworks
+    depends_on:
+      - backend # Optional: if your frontend dev server needs the backend to be up for proxying or initial data.
+                # For many dev setups, this isn't strictly necessary for the dev server to start.
+
 volumes:
-  redis_data: 
+  redis_data:
+  # temp_data:
+             # If you prefer a named volume for temp data instead of a bind mount:
+             # backend:
+             #   volumes:
+             #     - ./backend:/app/backend
+             #     - temp_data:/app/backend/temp
+             # worker:
+             #   volumes:
+             #     - ./backend:/app/backend
+             #     - temp_data:/app/backend/temp 

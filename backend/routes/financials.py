@@ -37,7 +37,7 @@ async def process_financials(
     
     # --- BEGIN RATE LIMIT CHECK ---
     try:
-        check_and_increment_api_usage(current_user.id)
+        check_and_increment_api_usage(current_user)
         # If the above function returns, the user is within limits and count is incremented.
         # If limit is exceeded, it raises HTTPException 429.
     except HTTPException as http_exc:

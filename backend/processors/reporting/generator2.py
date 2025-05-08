@@ -370,41 +370,52 @@ class ReportGenerator2:
 
     @staticmethod
     def _add_valuation_graph(doc: Document, valuation_data: Dict, ebit_key: str, ebitda_key: str, title: str):
+        ebit_value = valuation_data.get(ebit_key)
+        ebitda_value = valuation_data.get(ebitda_key)
+
+        labels = []
+        values = []
+
+        if ebit_value is not None:
+            labels.append('EV/EBIT')
+            values.append(ebit_value)
+        if ebitda_value is not None:
+            labels.append('EV/EBITDA')
+            values.append(ebitda_value)
+
+        if not values: # No data to plot
+            logger.info("No valuation data available to plot graph.")
+            return
+
         try:
-            ebit_value = valuation_data.get(ebit_key)
-            ebitda_value = valuation_data.get(ebitda_key)
+            fig, ax = plt.subplots(figsize=(6, 4)) # Width, Height in inches
+            bars = ax.bar(labels, values, color=['skyblue', 'lightgreen'])
+            ax.set_ylabel(f'{ReportGenerator2._format_currency(1, unit="").split(" ")[1]} thousands') # Extract currency symbol
+            ax.set_title(title)
+            ax.spines['top'].set_visible(False)
+            ax.spines['right'].set_visible(False)
 
-            if not isinstance(ebit_value, (int, float)) or not isinstance(ebitda_value, (int, float)):
-                doc.add_paragraph(f"Insufficient data for '{title}' graph.")
-                logger.warning(f"Graph generation skipped for '{title}' due to missing/invalid data: EBIT={ebit_value}, EBITDA={ebitda_value}")
-                return
-
-            plt.figure(figsize=(6, 3.5)) # Adjusted size
-            metrics = ['EBIT', 'EBITDA']
-            values = [ebit_value, ebitda_value]
-            
-            bars = plt.bar(metrics, values, color=['#4A86E8', '#76A7F2']) # Example colors
-            plt.title(title, fontsize=10)
-            plt.ylabel('Value (Kč thousands)', fontsize=8)
-            plt.xticks(fontsize=8)
-            plt.yticks(fontsize=8)
-            plt.grid(axis='y', linestyle='--', alpha=0.7)
-
-            # Add labels on bars
+            # Add labels on top of bars
             for bar in bars:
                 yval = bar.get_height()
-                plt.text(bar.get_x() + bar.get_width()/2.0, yval + (max(values)*0.02), f'{yval:,.0f}', ha='center', va='bottom', fontsize=7)
+                plt.text(bar.get_x() + bar.get_width()/2.0, yval + (max(values)*0.02), # Position above bar
+                         ReportGenerator2._format_currency(yval, unit="").strip(), # Format without unit for compactness
+                         ha='center', va='bottom', fontsize=9)
 
-            img_stream = io.BytesIO()
-            plt.savefig(img_stream, format='png', bbox_inches='tight', dpi=150)
-            img_stream.seek(0)
-            
-            doc.add_picture(img_stream, width=Inches(5.0)) # Adjusted width
-            plt.close() # Close the plot to free memory
-            logger.info(f"Successfully added graph: {title}")
+            # Ensure y-axis starts at 0 or slightly below if negative values are possible (not typical for EV)
+            ax.set_ylim(bottom=0)
+
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', bbox_inches='tight', dpi=150)
+            img_buffer.seek(0)
+            doc.add_picture(img_buffer, width=Inches(6.0))
         except Exception as e:
-            doc.add_paragraph(f"Error generating graph '{title}': {str(e)}")
-            logger.error(f"Error generating graph '{title}': {e}", exc_info=True)
+            logger.error(f"Error generating valuation graph: {e}", exc_info=True)
+        finally:
+            if 'fig' in locals(): # Ensure fig was created
+                plt.close(fig)  # Crucial: Close the figure to release resources
+            if 'img_buffer' in locals() and not img_buffer.closed: # Ensure buffer exists and is not already closed
+                img_buffer.close() # Close the BytesIO buffer
 
 if __name__ == '__main__':
     # Dummy data for testing ReportGenerator2
