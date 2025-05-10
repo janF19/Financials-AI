@@ -12,7 +12,7 @@ import {
   Button,
   CircularProgress,
   Alert,
-  Grid,
+  GridLegacy as Grid,
   Divider
 } from '@mui/material';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';

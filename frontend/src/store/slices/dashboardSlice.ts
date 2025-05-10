@@ -1,7 +1,7 @@
 // src/store/slices/dashboardSlice.ts
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { dashboardService } from '../../services/api';
-import { DashboardState } from '../../types';
+import { DashboardState } from '../../types/index';
 import { toast } from 'react-toastify';
 
 // Async thunks

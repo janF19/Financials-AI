@@ -1,0 +1,30 @@
+filebeat.inputs:
+- type: container
+  paths:
+    - /var/lib/docker/containers/*/*.log
+  processors:
+    - add_docker_metadata: {}
+    - drop_event:
+        when:
+          not:
+            equals:
+              container.labels.logs.service: "worker"
+  # Adjust multiline settings for Celery stack traces or multi-line log messages
+  multiline.type: pattern
+  multiline.pattern: '^\s|^\t|^(?:Traceback|Exception|Error|Caused by:)'
+  multiline.negate: false
+  multiline.match: after
+  multiline.timeout: 5s
+  multiline.max_lines: 500
+
+output.redis:
+  hosts: ["logging-redis:6379"]
+  key: "worker_logs" # Unique key
+  db: 0
+  timeout: 5s
+
+fields:
+  log_source_service: "worker"
+fields_under_root: true
+
+logging.level: info 

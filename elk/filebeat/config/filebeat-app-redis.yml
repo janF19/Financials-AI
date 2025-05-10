@@ -1,0 +1,24 @@
+filebeat.inputs:
+- type: container
+  paths:
+    - /var/lib/docker/containers/*/*.log
+  processors:
+    - add_docker_metadata: {}
+    - drop_event:
+        when:
+          not:
+            equals:
+              container.labels.logs.service: "app-redis"
+  # Redis logs are typically single line.
+
+output.redis:
+  hosts: ["logging-redis:6379"]
+  key: "app_redis_logs" # Unique key
+  db: 0
+  timeout: 5s
+
+fields:
+  log_source_service: "app-redis"
+fields_under_root: true
+
+logging.level: info 

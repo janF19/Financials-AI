@@ -4,10 +4,10 @@ import {
   TextField,
   Button,
   Typography,
-  Card,
-  CardContent,
-  CardActions,
-  Grid,
+  // Card,
+  // CardContent,
+  // CardActions,
+  //Grid,
   CircularProgress,
   Alert,
   Dialog,
@@ -16,9 +16,10 @@ import {
   DialogContentText,
   DialogTitle,
   Paper,
-  Snackbar,
+  // Snackbar,
   Divider
 } from '@mui/material';
+
 import SearchIcon from '@mui/icons-material/Search';
 import { useAppDispatch, useAppSelector } from '../hooks/redux'; // Use Redux hooks
 import { fetchCompanies, triggerValuation, resetValuationStatus } from '../store/slices/searchSlice'; // Import actions/thunks
@@ -48,8 +49,8 @@ const SearchPage: React.FC = () => {
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
 
   // State for Snackbar notification
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
+  // const [snackbarOpen, setSnackbarOpen] = useState(false);
+  // const [snackbarMessage, setSnackbarMessage] = useState('');
 
   // Effect to show notifications based on valuation status
   useEffect(() => {
@@ -66,22 +67,31 @@ const SearchPage: React.FC = () => {
     let params: SearchParams = {};
     let canSearch = false;
 
-    if (type === 'person' && firstName && lastName) {
-      params = { first_name: firstName, last_name: lastName };
-      canSearch = true;
-    } else if (type === 'company' && companyName) {
-      params = { company_name: companyName };
-      canSearch = true;
-    } else if (type === 'ico' && ico) {
-      params = { ico: ico };
-      canSearch = true;
+    if (type === 'person') {
+      if (firstName && lastName) {
+        params = { first_name: firstName, last_name: lastName };
+        canSearch = true;
+      } else {
+        toast.warn('Please enter both first name and last name.');
+      }
+    } else if (type === 'company') {
+      if (companyName) {
+        params = { company_name: companyName };
+        canSearch = true;
+      } else {
+        toast.warn('Please enter company name.');
+      }
+    } else if (type === 'ico') {
+      if (ico) {
+        params = { ico: ico };
+        canSearch = true;
+      } else {
+        toast.warn('Please enter IČO.');
+      }
     }
 
     if (canSearch) {
       dispatch(fetchCompanies(params));
-    } else {
-        // Basic validation feedback (could use form helper text)
-        toast.warn('Please fill in the required fields for the search.');
     }
   };
 
@@ -140,102 +150,106 @@ const SearchPage: React.FC = () => {
       </Typography>
 
       <Paper elevation={2} sx={{ p: 3, mb: 4 }}>
-        <Grid container spacing={3}>
-          {/* Search by Person Name */}
-          <Grid xs={12}>
-            <Typography variant="body1" gutterBottom>
-              Search company based on participation by person name:
-            </Typography>
-            <Grid container spacing={2} alignItems="center">
-                 <Grid xs={12} sm={5}>
-                     <TextField
-                        fullWidth
-                        label="First Name"
-                        variant="outlined"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        disabled={isLoading}
-                        size="small"
-                     />
-                 </Grid>
-                 <Grid xs={12} sm={5}>
-                     <TextField
-                        fullWidth
-                        label="Last Name"
-                        variant="outlined"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        disabled={isLoading}
-                        size="small"
-                     />
-                 </Grid>
-                 <Grid xs={12} sm={2}>
-                    <Button
-                        fullWidth
-                        variant="contained"
-                        onClick={() => handleSearch('person')}
-                        disabled={isLoading || !firstName || !lastName || valuationStatus === 'pending'}
-                        startIcon={<SearchIcon />}
-                    >
-                        Search
-                    </Button>
-                 </Grid>
-            </Grid>
-          </Grid>
+        {/* Search by Person Name */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="body1" gutterBottom>
+            Search company based on participation by person name:
+          </Typography>
+          <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', sm: 'row' }, 
+            gap: 2,
+            alignItems: 'center'
+          }}>
+            <TextField
+              fullWidth
+              label="First Name"
+              variant="outlined"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              disabled={isLoading}
+              size="small"
+              sx={{ flex: { sm: 2 } }}
+            />
+            <TextField
+              fullWidth
+              label="Last Name"
+              variant="outlined"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              disabled={isLoading}
+              size="small"
+              sx={{ flex: { sm: 2 } }}
+            />
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => handleSearch('person')}
+              disabled={isLoading || valuationStatus === 'pending'}
+              startIcon={<SearchIcon />}
+              sx={{ flex: { sm: 1 } }}
+            >
+              Search
+            </Button>
+          </Box>
+        </Box>
 
-          {/* Search by Company Name */}
-          <Grid xs={12}>
-            <Typography variant="body1" gutterBottom>
-              Search company based on name:
-            </Typography>
-             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                fullWidth
-                label="Enter name of company"
-                variant="outlined"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                disabled={isLoading || valuationStatus === 'pending'}
-                size="small"
-              />
-              <Button
-                variant="contained"
-                onClick={() => handleSearch('company')}
-                disabled={isLoading || !companyName || valuationStatus === 'pending'}
-                startIcon={<SearchIcon />}
-              >
-                Search
-              </Button>
-            </Box>
-          </Grid>
+        {/* Search by Company Name */}
+        <Box sx={{ mb: 3 }}>
+          <Typography variant="body1" gutterBottom>
+            Search company based on name:
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+            <TextField
+              fullWidth
+              label="Enter name of company"
+              variant="outlined"
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              disabled={isLoading || valuationStatus === 'pending'}
+              size="small"
+              sx={{ flex: 1 }}
+            />
+            <Button
+              variant="contained"
+              onClick={() => handleSearch('company')}
+              disabled={isLoading || valuationStatus === 'pending'}
+              startIcon={<SearchIcon />}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              Search
+            </Button>
+          </Box>
+        </Box>
 
-          {/* Search by ICO */}
-          <Grid item xs={12}>
-            <Typography variant="body1" gutterBottom>
-              Search company based on IČO:
-            </Typography>
-             <Box sx={{ display: 'flex', gap: 2 }}>
-              <TextField
-                fullWidth
-                label="Enter IČO"
-                variant="outlined"
-                value={ico}
-                onChange={(e) => setIco(e.target.value)}
-                disabled={isLoading || valuationStatus === 'pending'}
-                size="small"
-                type="number" // Basic type validation
-              />
-              <Button
-                variant="contained"
-                onClick={() => handleSearch('ico')}
-                disabled={isLoading || !ico || valuationStatus === 'pending'}
-                startIcon={<SearchIcon />}
-              >
-                Search
-              </Button>
-            </Box>
-          </Grid>
-        </Grid>
+        {/* Search by ICO */}
+        <Box>
+          <Typography variant="body1" gutterBottom>
+            Search company based on IČO:
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+            <TextField
+              fullWidth
+              label="Enter IČO"
+              variant="outlined"
+              value={ico}
+              onChange={(e) => setIco(e.target.value)}
+              disabled={isLoading || valuationStatus === 'pending'}
+              size="small"
+              type="number"
+              sx={{ flex: 1 }}
+            />
+            <Button
+              variant="contained"
+              onClick={() => handleSearch('ico')}
+              disabled={isLoading || valuationStatus === 'pending'}
+              startIcon={<SearchIcon />}
+              sx={{ width: { xs: '100%', sm: 'auto' } }}
+            >
+              Search
+            </Button>
+          </Box>
+        </Box>
       </Paper>
 
       {/* Loading Indicator */}
@@ -282,10 +296,14 @@ const SearchPage: React.FC = () => {
 
               return (
                 <Box key={company.id} sx={{ px: 2, py: 2 }}>
-                  {/* Revert to the two-column Grid structure */}
-                  <Grid container spacing={2}>
-                    {/* Left Column (Default Alignment - Left) */}
-                    <Grid item xs={12} md={6}>
+                  {/* Two-column layout with Box instead of Grid */}
+                  <Box sx={{ 
+                    display: 'flex', 
+                    flexDirection: { xs: 'column', md: 'row' },
+                    gap: 2
+                  }}>
+                    {/* Left Column */}
+                    <Box sx={{ flex: 1 }}>
                       {/* Person Info Block */}
                       {lastSearchType === 'person' && company.person && (
                         <Box sx={{ mb: 2 }}>
@@ -298,37 +316,36 @@ const SearchPage: React.FC = () => {
                         <LabelValue label="Název subjektu" value={company.company_name} isBoldValue={!company.person} />
                         <LabelValue label="Spisová značka" value={fileNumber ? `${fileNumber} ${court ? `vedená u ${court}` : ''}`: null} />
                       </Box>
-                    </Grid>
+                    </Box>
 
-                    {/* Right Column - Apply Flexbox alignment */}
-                    <Grid item xs={12} md={6} sx={{
-                      display: 'flex', // Make the Grid item a flex container
-                      flexDirection: 'column', // Stack children vertically
-                      alignItems: 'flex-end' // Align children (the Boxes) to the right
+                    {/* Right Column */}
+                    <Box sx={{ 
+                      flex: 1,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: { xs: 'flex-start', md: 'flex-end' }
                     }}>
                       {/* Person Info Block */}
                       {lastSearchType === 'person' && company.person && (
-                        // This Box will now be aligned to the right
-                        <Box sx={{ mb: 2, width: 'fit-content' }}> {/* width: fit-content helps alignment */}
+                        <Box sx={{ mb: 2, width: 'fit-content' }}>
                           <LabelValue label="Datum narození" value={company.person.birth_date} isBoldValue/>
                           <LabelValue label="Angažmá" value={company.person.role} />
                         </Box>
                       )}
                       {/* Company Info Block */}
-                       // This Box will now be aligned to the right
-                      <Box sx={{ width: 'fit-content' }}> {/* width: fit-content helps alignment */}
+                      <Box sx={{ width: 'fit-content' }}>
                         <LabelValue label="IČO" value={company.ico} isBoldValue />
                         <LabelValue label="Den zápisu" value={company.registration_date} />
                       </Box>
-                    </Grid>
-                  </Grid>
+                    </Box>
+                  </Box>
 
                   {/* Valuation Button */}
                   <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 1.5 }}>
                     <Button
                       variant="contained"
                       color="success"
-                      size="small" // Make button smaller to fit better
+                      size="small"
                       onClick={() => handleValuationSelect(company)}
                       disabled={valuationStatus === 'pending'}
                     >

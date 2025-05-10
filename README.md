@@ -42,3 +42,9 @@ uvicorn backend.main:app
 ### Backend
 
 npm run dev
+
+# Application with ELK Monitoring
+
+This project includes an application stack (Backend, Worker, Frontend, Nginx, Redis) and an ELK stack (Elasticsearch, Logstash, Kibana) with Beats for monitoring.
+
+## Directory Structure for ELK

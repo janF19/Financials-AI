@@ -1,7 +1,7 @@
 // src/store/slices/reportSlice.ts
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { reportService } from '../../services/api';
-import { ReportsState, ReportFilterParams, Report } from '../../types';
+import { ReportsState, ReportFilterParams} from '../../types/index.ts';
 import { toast } from 'react-toastify';
 
 // Async thunks
@@ -151,7 +151,7 @@ const reportSlice = createSlice({
       })
       
       // Download report cases
-      .addCase(downloadReport.pending, (state) => {
+      .addCase(downloadReport.pending, () => {
         // We're now handling loading state via setDownloadingId
       })
       .addCase(downloadReport.fulfilled, (state) => {

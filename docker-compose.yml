@@ -45,25 +45,34 @@ services:
     depends_on:
       - redis
 
+  # Frontend service for DEVELOPMENT (Vite dev server)
+  # Run with: docker-compose up frontend backend
   frontend:
     build:
       context: ./frontend # Path to your frontend directory
       dockerfile: Dockerfile
+      target: development # Target the 'development' stage from frontend/Dockerfile
     ports:
-      - "5173:5173" # Map host port 3000 to container port 3000 (adjust if your frontend uses a different port)
+      - "5173:5173"
     volumes:
-      - ./frontend:/app # Mount your local frontend code into the container for hot-reloading
-      - /app/node_modules # Anonymous volume to prevent local node_modules from overwriting container's node_modules
+      - ./frontend:/app # Mount your local frontend code for hot-reloading
+      - /app/node_modules # Anonymous volume for node_modules
     environment:
-      # If your frontend needs to know the backend URL, you can set it here.
-      # Example for a React app using Vite, it might look for VITE_API_URL:
-      # - VITE_API_URL=http://localhost:8000/api 
-      # Ensure your frontend code uses this environment variable.
-      # For Next.js, it might be NEXT_PUBLIC_API_URL.
-      - NODE_ENV=development # Ensures development mode for some frameworks
+      - NODE_ENV=development
+      # Vite will pick up VITE_API_URL from frontend/.env.development
     depends_on:
-      - backend # Optional: if your frontend dev server needs the backend to be up for proxying or initial data.
-                # For many dev setups, this isn't strictly necessary for the dev server to start.
+      - backend
+
+  # Nginx service for production-like serving
+  # Run with: docker-compose up nginx backend (this will also build the frontend for production)
+  nginx:
+    build:
+      context: . # Build context is the project root
+      dockerfile: nginx/Dockerfile # Path to the Nginx Dockerfile we created
+    ports:
+      - "80:80" # Nginx listens on port 80 on the host
+    depends_on:
+      - backend # Nginx needs the backend to be up to proxy API requests
 
 volumes:
   redis_data:

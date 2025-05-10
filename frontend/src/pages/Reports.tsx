@@ -32,7 +32,14 @@ import { Download as DownloadIcon, Delete as DeleteIcon, Refresh as RefreshIcon 
 import { format } from 'date-fns';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { fetchReports, downloadReport, deleteReport } from '../store/slices/reportSlice';
-import { Report } from '../types';
+import { Report } from '../types/index';
+
+// Define the type for the data returned by fetchReports().unwrap()
+interface FetchedReportsPayload {
+  reports: Report[];
+  total: number;
+  // Add other properties if your API and thunk return more and you need to access them here
+}
 
 const ConfirmationDialog = ({ open, onClose, onConfirm, title, content }: { open: boolean, onClose: () => void, onConfirm: () => void, title: string, content: string }) => {
   return (
@@ -82,10 +89,10 @@ const Reports = () => {
     console.log('Fetching reports with params:', params);
     dispatch(fetchReports(params))
       .unwrap()
-      .then(data => {
+      .then((data: FetchedReportsPayload) => {
         console.log('Reports fetch successful:', data);
       })
-      .catch(err => {
+      .catch((err: any) => {
         console.error('Reports fetch error:', err);
       });
   }
@@ -99,7 +106,7 @@ const Reports = () => {
     console.log("Reports with statuses:", reports.map((r: Report) => ({ id: r.id, status: r.status })));
   }, [reports]);
 
-  const handleChangePage = (event: unknown, newPage: number) => {
+  const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
   };
 

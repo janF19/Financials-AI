@@ -1,6 +1,6 @@
 # Use an official Node.js runtime as a parent image
 # Choose a version that matches your project's requirements (e.g., 18, 20, etc.)
-FROM node:18-alpine
+FROM node:18-alpine AS builder
 
 # Set the working directory in the container
 WORKDIR /app
@@ -19,9 +19,19 @@ RUN npm install
 # Copy the rest of the frontend application code into the container
 COPY . .
 
-# The port your frontend development server runs on (e.g., 3000 for React, 5173 for Vite)
-# Update this if your frontend runs on a different port
-EXPOSE 5173
+# npm run build will use .env.production (if it exists) by default, setting VITE_API_URL=/api
+RUN npm run build
 
-# The command to start your development server
+# Stage 2: Development server (this will be targeted by the 'frontend' service in docker-compose)
+FROM node:18-alpine AS development
+WORKDIR /app
+COPY package.json ./
+COPY package-lock.json ./
+# If you use yarn, adjust:
+# COPY yarn.lock ./
+RUN npm install
+# If you use yarn, adjust:
+# RUN yarn install
+COPY . .
+EXPOSE 5173
 CMD ["npm", "run", "dev"] 

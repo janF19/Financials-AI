@@ -9,7 +9,6 @@ import {
   LinearProgress,
   Alert,
   CircularProgress,
-  Link as MuiLink,
   Chip
 } from '@mui/material';
 import { CloudUpload as CloudUploadIcon, CheckCircle, Error as ErrorIcon } from '@mui/icons-material';
@@ -131,7 +130,7 @@ const Process = () => {
   };
 
   const handleDownload = () => {
-    if (currentReport?.id && currentReport.status === 'completed') {
+    if (currentReport?.id && currentReport.status === 'processed') {
       dispatch(downloadReport(currentReport.id));
     }
   };
@@ -244,7 +243,7 @@ const Process = () => {
         {/* Process Complete State */}
         {currentReport && !isUploading && (
           <Box sx={{ textAlign: 'center', py: 2 }}>
-            {currentReport.status === 'completed' && (
+            {currentReport.status === 'processed' && (
               <Box>
                 <CheckCircle color="success" sx={{ fontSize: 48, mb: 1 }} />
                 <Typography variant="h6" color="success.main">Processing Successful!</Typography>
@@ -287,7 +286,7 @@ const Process = () => {
               </Box>
             )}
             {/* Handle unexpected status just in case */}
-            {currentReport.status !== 'completed' && currentReport.status !== 'failed' && (
+            {currentReport.status !== 'processed' && currentReport.status !== 'failed' && (
                  <Box>
                     <Typography variant="h6">Processing Status: <Chip label={currentReport.status} /></Typography>
                      <Typography variant="body1" sx={{ mt: 1, mb: 2 }}>

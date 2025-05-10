@@ -1,7 +1,7 @@
 // src/store/slices/uploadSlice.ts
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { processService, reportService } from '../../services/api';
-import { UploadState, Report } from '../../types';
+import { UploadState, Report } from '../../types/index.ts';
 import { toast } from 'react-toastify';
 import { AxiosError } from 'axios';
 

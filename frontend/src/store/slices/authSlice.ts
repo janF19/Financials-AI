@@ -1,7 +1,7 @@
 // src/store/slices/authSlice.ts
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import { authService } from '../../services/api';
-import { AuthState, LoginCredentials, RegisterCredentials, User } from '../../types';
+import { AuthState, LoginCredentials, RegisterCredentials, User } from '../../types/index.ts';
 import { toast } from 'react-toastify';
 
 // Async thunks
