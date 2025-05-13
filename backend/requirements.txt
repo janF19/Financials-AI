@@ -113,3 +113,5 @@ websocket-client==1.8.0 ; python_version >= "3.12" and python_version < "4.0"
 websockets==14.2 ; python_version >= "3.12" and python_version < "4.0"
 wsproto==1.2.0 ; python_version >= "3.12" and python_version < "4.0"
 yarl==1.19.0 ; python_version >= "3.12" and python_version < "4.0"
+prometheus-fastapi-instrumentator==6.1.0
+google-generativeai

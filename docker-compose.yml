@@ -2,11 +2,13 @@ version: '3.8'
 
 services:
   redis:
-    image: "redis:alpine"
+    image: redis:alpine
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - app-network
 
   backend:
     build:
@@ -27,6 +29,8 @@ services:
       - TEMP_STORAGE_PATH=/app/backend/temp
     depends_on:
       - redis
+    networks:
+      - app-network
 
   worker:
     build:
@@ -44,45 +48,139 @@ services:
       - TEMP_STORAGE_PATH=/app/backend/temp
     depends_on:
       - redis
+    networks:
+      - app-network
 
-  # Frontend service for DEVELOPMENT (Vite dev server)
-  # Run with: docker-compose up frontend backend
+  celery-exporter:
+    image: danihodovic/celery-exporter:latest
+    command: --broker-url=redis://redis:6379/0 --port=9540
+    ports:
+      - "9540:9540"
+    depends_on:
+      - redis
+      - worker
+    networks:
+      - app-network
+
   frontend:
     build:
-      context: ./frontend # Path to your frontend directory
+      context: ./frontend
       dockerfile: Dockerfile
-      target: development # Target the 'development' stage from frontend/Dockerfile
+      target: development
     ports:
       - "5173:5173"
     volumes:
-      - ./frontend:/app # Mount your local frontend code for hot-reloading
-      - /app/node_modules # Anonymous volume for node_modules
+      - ./frontend:/app
+      - /app/node_modules
     environment:
       - NODE_ENV=development
-      # Vite will pick up VITE_API_URL from frontend/.env.development
     depends_on:
       - backend
+    networks:
+      - app-network
 
-  # Nginx service for production-like serving
-  # Run with: docker-compose up nginx backend (this will also build the frontend for production)
   nginx:
     build:
-      context: . # Build context is the project root
-      dockerfile: nginx/Dockerfile # Path to the Nginx Dockerfile we created
+      context: .
+      dockerfile: nginx/Dockerfile
     ports:
-      - "80:80" # Nginx listens on port 80 on the host
+      - "80:80"
     depends_on:
-      - backend # Nginx needs the backend to be up to proxy API requests
+      - backend
+    networks:
+      - app-network
+
+  nginx-exporter:
+    image: nginx/nginx-prometheus-exporter:latest
+    command: -nginx.scrape-uri=http://nginx/stub_status # Ensure nginx exposes /stub_status on port 80
+    ports:
+      - "9113:9113"
+    depends_on:
+      - nginx
+    networks:
+      - app-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=3d' # Store 3 days of metrics
+    depends_on:
+      - backend
+      - celery-exporter
+      - nginx-exporter
+      - redis-exporter
+      - node-exporter
+      - blackbox-exporter
+    networks:
+      - app-network
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin # Change for production
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    networks:
+      - app-network
+
+  redis-exporter:
+    image: oliver006/redis_exporter:latest
+    environment:
+      - REDIS_ADDR=redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      - redis
+    networks:
+      - app-network
+
+  # Uncomment and add the blackbox-exporter service
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    ports:
+      - "9115:9115"
+    volumes:
+      - ./monitoring/blackbox.yml:/config/blackbox.yml
+    command:
+      - '--config.file=/config/blackbox.yml'
+    networks:
+      - app-network
+
+  # Note: The commented out blackbox-exporter is now an active service
 
 volumes:
   redis_data:
-  # temp_data:
-             # If you prefer a named volume for temp data instead of a bind mount:
-             # backend:
-             #   volumes:
-             #     - ./backend:/app/backend
-             #     - temp_data:/app/backend/temp
-             # worker:
-             #   volumes:
-             #     - ./backend:/app/backend
-             #     - temp_data:/app/backend/temp 
+  prometheus_data:
+    driver: local # Non-persistent, minimal disk usage
+  grafana_data:
+    driver: local # Non-persistent, minimal disk usage
+
+networks:
+  app-network:
+    driver: bridge 

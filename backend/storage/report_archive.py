@@ -1,8 +1,9 @@
 import os
 import uuid
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
+import json
 
 # Add explicit import for PyJWT to ensure it's available for Supabase
 import jwt as pyjwt
@@ -18,81 +19,85 @@ logger = logging.getLogger(__name__)
 load_dotenv()
 
 
-def save_report(user_id: str, report_path: Path, original_file_name: str, report_id: str = None, is_v2: bool = False) -> str:
+def save_report(user_id: str, temp_report_path: Path, original_filename: str, report_id: str, is_v2: bool = False, is_v3: bool = False):
     """
-    Save a report to storage and create a database record.
-    
+    Saves the generated report DOCX file to Supabase storage.
+
     Args:
-        user_id: The ID of the user who owns the report
-        report_path: The path to the report file
-        original_file_name: The original filename of the report
-        report_id: Optional existing report ID to update instead of creating new
-        is_v2: Boolean indicating if this is a V2 report (for potential differentiation)
-    
+        user_id: The ID of the user.
+        temp_report_path: The local Path object of the generated DOCX file.
+        original_filename: The original name of the uploaded source file (e.g., PDF).
+        report_id: The unique ID for this report.
+        is_v2: Flag indicating if this is a V2 workflow report.
+        is_v3: Flag indicating if this is a V3 workflow report.
+
     Returns:
-        The URL to the stored report in Supabase storage
+        The public URL of the uploaded report.
+
+    Raises:
+        Exception: If the upload fails.
     """
     try:
-        # Generate a unique filename with timestamp and user ID
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        version_prefix = "v2_" if is_v2 else ""
-        report_filename = f"{user_id}_{timestamp}_{version_prefix}{Path(report_path).name}"
-        
-        # Example: Differentiate storage path for V2 reports if needed
-        # storage_folder = f"{user_id}/v2_reports" if is_v2 else f"{user_id}"
-        # storage_path = f"{storage_folder}/{report_filename}"
-        # For now, keeping the same top-level user folder:
-        storage_path = f"{user_id}/{report_filename}"
-        
-        logger.info(f"Attempting to save report. User: {user_id}, Path: {report_path}, Original: {original_file_name}, ReportID: {report_id}, IsV2: {is_v2}")
-        
-        # Upload to Supabase Storage
-        with open(report_path, "rb") as file:
-                response = supabase.storage.from_(settings.STORAGE_BUCKET).upload(storage_path, file)
-                logger.info(f"Uploaded report to Supabase Storage: {response}. Path: {storage_path}")
-        
-        # Get public URL
-        report_url = supabase.storage.from_(settings.STORAGE_BUCKET).get_public_url(storage_path)
-        logger.info(f"Report public URL: {report_url}")
-        
-        # If we have an existing report ID, just update it instead of creating a new record
-        if report_id:
-            update_data = {
-                "report_url": report_url,
-                "status": "processed",
-                # Optionally, update a version field in the DB if you add one
-                # "report_version": "2.0" if is_v2 else "1.0" 
-            }
-            supabase.table("reports").update(update_data).eq("id", report_id).execute()
-            logger.info(f"Updated existing report record: {report_id}")
+        # Determine storage path based on flags
+        if is_v3:
+            storage_folder = "reports_v3"
+            report_filename = f"report_v3_{report_id}.docx"
+            logger.info(f"Using V3 storage path: {storage_folder}")
+        elif is_v2:
+            storage_folder = "reports_v2"
+            report_filename = f"report_v2_{report_id}.docx"
+            logger.info(f"Using V2 storage path: {storage_folder}")
         else:
-            # Create record in reports table
-            report_data_dict = {
-                "user_id": user_id,
-                "file_name": original_file_name, # This is the original uploaded PDF/doc name
-                "report_url": report_url,
-                "original_file_path": original_file_name, # Consider if this should be the path of the input file to the workflow
-                "status": "processed",
-                # Optionally, add a version field
-                # "report_version": "2.0" if is_v2 else "1.0"
-            }
-            
-            # Convert UUID to string for Supabase if user_id is UUID
-            if isinstance(report_data_dict["user_id"], uuid.UUID):
-                report_data_dict["user_id"] = str(report_data_dict["user_id"])
-            
-            # Use ReportCreate model if you want validation, then dump to dict
-            # For simplicity here, constructing dict directly
-            # report_model_data = ReportCreate(**report_data_dict)
-            # supabase.table("reports").insert(report_model_data.model_dump()).execute()
-            
-            supabase.table("reports").insert(report_data_dict).execute()
-            logger.info(f"Created database record for report: {report_url}")
-            
-        return report_url
+            # Default or V1 path
+            storage_folder = "reports"
+            report_filename = f"report_{report_id}.docx"
+            logger.info(f"Using default/V1 storage path: {storage_folder}")
+
+        storage_path = f"{user_id}/{storage_folder}/{report_filename}"
+        metadata_path = f"{user_id}/{storage_folder}/metadata_{report_id}.json" # Example metadata path
+
+        # Example: Uploading the file
+        with open(temp_report_path, 'rb') as f:
+            # Use upsert=True to overwrite if it somehow exists
+            supabase.storage.from_(settings.SUPABASE_REPORTS_BUCKET).upload(
+                path=storage_path,
+                file=f,
+                file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "upsert": "true"}
+            )
+        logger.info(f"Successfully uploaded report to: {storage_path}")
+
+        # Optionally save metadata (like original filename, version)
+        metadata = {
+            "original_filename": original_filename,
+            "report_id": report_id,
+            "user_id": user_id,
+            "storage_path": storage_path,
+            "workflow_version": "3.0" if is_v3 else ("2.0" if is_v2 else "1.0"),
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        try:
+             # Convert metadata dict to bytes for upload
+             metadata_bytes = json.dumps(metadata, indent=2).encode('utf-8')
+             supabase.storage.from_(settings.SUPABASE_REPORTS_BUCKET).upload(
+                 path=metadata_path,
+                 file=metadata_bytes,
+                 file_options={"content-type": "application/json", "upsert": "true"}
+             )
+             logger.info(f"Successfully uploaded metadata to: {metadata_path}")
+        except Exception as meta_err:
+             logger.warning(f"Failed to upload metadata file {metadata_path}: {meta_err}")
+
+
+        # Get public URL
+        res = supabase.storage.from_(settings.SUPABASE_REPORTS_BUCKET).get_public_url(storage_path)
+        public_url = res # Adjust based on actual return value if needed
+
+        logger.info(f"Report public URL: {public_url}")
+        return public_url
+
     except Exception as e:
-        logger.error(f"Failed to save report to Supabase : {str(e)}")
-        raise
+        logger.error(f"Failed to upload report {storage_path} to Supabase Storage: {e}", exc_info=True)
+        raise Exception(f"Supabase Storage upload failed: {str(e)}") from e
 
 
 def get_report(report_id: str, user_id: Optional[str] = None) -> dict:

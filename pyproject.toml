@@ -70,6 +70,9 @@ python-multipart = "^0.0.20"
 selenium = "^4.32.0"
 redis = "^6.0.0"
 celery = "^5.5.2"
+prometheus-fastapi-instrumentator = "^7.1.0"
+google-genai = "^1.14.0"
+google-generativeai = "^0.8.5"
 
 
 [build-system]

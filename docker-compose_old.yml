@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    volumes:
+      - ./backend:/app/backend
+      - ./data/temp:/app/backend/temp
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - API_HOST=0.0.0.0
+      - TEMP_STORAGE_PATH=/app/backend/temp
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python -m celery -A backend.celery_app.celery_app worker -l info --pool=solo
+    volumes:
+      - ./backend:/app/backend
+      - ./data/temp:/app/backend/temp
+    env_file:
+      - .env
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - TEMP_STORAGE_PATH=/app/backend/temp
+    depends_on:
+      - redis
+
+  # Frontend service for DEVELOPMENT (Vite dev server)
+  # Run with: docker-compose up frontend backend
+  frontend:
+    build:
+      context: ./frontend # Path to your frontend directory
+      dockerfile: Dockerfile
+      target: development # Target the 'development' stage from frontend/Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app # Mount your local frontend code for hot-reloading
+      - /app/node_modules # Anonymous volume for node_modules
+    environment:
+      - NODE_ENV=development
+      # Vite will pick up VITE_API_URL from frontend/.env.development
+    depends_on:
+      - backend
+
+  # Nginx service for production-like serving
+  # Run with: docker-compose up nginx backend (this will also build the frontend for production)
+  nginx:
+    build:
+      context: . # Build context is the project root
+      dockerfile: nginx/Dockerfile # Path to the Nginx Dockerfile we created
+    ports:
+      - "80:80" # Nginx listens on port 80 on the host
+    depends_on:
+      - backend # Nginx needs the backend to be up to proxy API requests
+
+volumes:
+  redis_data:
+  # temp_data:
+             # If you prefer a named volume for temp data instead of a bind mount:
+             # backend:
+             #   volumes:
+             #     - ./backend:/app/backend
+             #     - temp_data:/app/backend/temp
+             # worker:
+             #   volumes:
+             #     - ./backend:/app/backend
+             #     - temp_data:/app/backend/temp 

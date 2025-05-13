@@ -1,0 +1,46 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'backend'
+    # metrics_path defaults to /metrics
+    static_configs:
+      - targets: ['backend:8000']
+
+  - job_name: 'celery'
+    static_configs:
+      - targets: ['celery-exporter:9540']
+
+  - job_name: 'nginx-exporter' # Scrapes the nginx-prometheus-exporter
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+
+  # Updated blackbox exporter job to use the dedicated blackbox-exporter service
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]  # Use the http_2xx module to verify HTTP 200 responses
+    static_configs:
+      - targets:
+          - 'http://frontend:5173'  # Probe Vite dev server
+          - 'http://nginx:80'      # Probe Nginx
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        # Now correctly point to the dedicated blackbox-exporter service
+        replacement: blackbox-exporter:9115 

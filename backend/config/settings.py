@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     STORAGE_BUCKET: str = os.getenv("STORAGE_BUCKET", "reports")
     TEMP_STORAGE_PATH: str = os.getenv("TEMP_STORAGE_PATH", "backend/temp")
     
+    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    
     # Optional: Local path for archiving reports, if used
     REPORT_ARCHIVE_PATH: Optional[str] = os.getenv("REPORT_ARCHIVE_PATH")
     
@@ -64,6 +66,10 @@ if not settings.MISTRAL_API_KEY and not settings.OPENAI_API_KEY:
     # Adjust this logic based on your application's actual needs.
     logger.warning("Neither MISTRAL_API_KEY nor OPENAI_API_KEY are set. Some features might not work.")
     # raise ValueError("At least one of MISTRAL_API_KEY or OPENAI_API_KEY must be provided if used by the application")
+
+if not settings.GOOGLE_API_KEY:
+    logger.error("GOOGLE_API_KEY is not set. Chat functionality will not work.")
+    raise ValueError("GOOGLE_API_KEY must be configured in .env for chat features.")
 
 if not settings.SUPABASE_URL or not settings.SUPABASE_KEY:
     raise ValueError("SUPABASE_URL and SUPABASE_KEY must be configured in .env")
