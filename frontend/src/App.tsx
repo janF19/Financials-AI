@@ -7,6 +7,9 @@ import 'react-toastify/dist/ReactToastify.css';
 import { useAppDispatch, useAppSelector } from './hooks/redux.ts';
 import { getProfile } from './store/slices/authSlice';
 
+
+import ChatPage from './pages/ChatPage';
+
 // @ts-ignore
 import Dashboard from './pages/Dashboard';
 // @ts-ignore
@@ -25,6 +28,8 @@ import Profile from './pages/Profile';
 import NotFound from './pages/NotFound';
 // @ts-ignore
 import Layout from './components/Layout.tsx';
+
+import CompanyInfoPage from './pages/CompanyInfoPage.tsx';
 
 // Guards
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
@@ -98,6 +103,8 @@ function App() {
           <Route path="reports" element={<Reports />} />
           <Route path="process" element={<Process />} />
           <Route path="search" element={<SearchPage />} />
+          <Route path="/chat" element={<ChatPage />} /> {/* Add ChatPage route */}
+          <Route path="info" element={<CompanyInfoPage />} />
           <Route path="profile" element={<Profile />} />
         </Route>
         

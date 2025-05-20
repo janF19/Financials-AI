@@ -27,7 +27,8 @@ timeout /t 3 >nul
 
 REM 3. Start FastAPI Backend (in a new command prompt window)
 echo Starting FastAPI backend...
-start "FastAPI Backend" cmd /k "cd /d "%SCRIPT_DIR%" && echo Using Poetry to run Uvicorn... && poetry run uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000"
+start "FastAPI Backend" cmd /k "cd /d "%SCRIPT_DIR%" && echo Using Poetry to run Uvicorn with TRACE logging... && poetry run uvicorn backend.main:app --host 0.0.0.0 --port 8002 --log-level trace --reload"
+
 REM If you don't use a virtual environment named 'venv', remove "CALL venv\Scripts\activate &&"
 REM or adjust to your virtual environment activation command.
 timeout /t 3 >nul

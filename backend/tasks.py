@@ -2,8 +2,8 @@ import os
 import logging
 from typing import Optional
 from backend.celery_app import celery_app
-from backend.processors.workflow import ValuationWorkflow # For financials endpoint
-from backend.processors.workflow2 import ValuationWorkflow2 # For search/valuate endpoint
+from backend.services.processors.workflow import ValuationWorkflow # For financials endpoint
+from backend.services.processors.workflow2 import ValuationWorkflow2  # For search/valuate endpoint
 from backend.database import supabase # Ensure supabase client is accessible
 
 logger = logging.getLogger(__name__)

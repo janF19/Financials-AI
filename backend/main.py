@@ -3,9 +3,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 import time # For startup time
+import logging # Add this import
+import sys # Import sys for sys.stdout
 
-from backend.routes import auth, financials, dashboard, reports, health, search, chat
+from backend.routes import auth, financials, dashboard, reports, health, search, chat, info
 from backend.config.settings import settings
+
+
+
+# You can also set specific levels for noisy third-party loggers if needed
+logging.getLogger("uvicorn.access").setLevel(logging.INFO) # Example: make uvicorn access logs less verbose
+logging.getLogger("selenium.webdriver.remote.remote_connection").setLevel(logging.WARNING)
+logging.getLogger("webdriver_manager").setLevel(logging.WARNING)
 
 app = FastAPI(
     title="Financial Valuation System API",
@@ -31,34 +40,36 @@ app.include_router(reports.router)
 app.include_router(health.router)
 app.include_router(search.router)
 app.include_router(chat.router)
+app.include_router(info.router)
 
-
-Instrumentator().instrument(app).expose(app)
+#Instrumentator().instrument(app).expose(app) # Keep commented out for now
 
 @app.on_event("startup")
 async def startup_event():
     """
     Store startup time in app state for uptime calculation.
-    This is used by your existing health check in backend/routes/health.py
     """
     app.state.start_time = time.time()
-    # Instrument the app after all routes are added, including those from other modules
-    # and after startup events if they modify app state used by instrumentator (not typical).
-    # Expose metrics at /metrics
-    
+    # The logging.info call below will now use the configuration set by basicConfig
+    logging.info("Application startup complete. Uptime clock started.")
 
-# Add a simple health endpoint at /health, as requested by the prompt
+
 @app.get("/health", tags=["Main Health Check"])
 async def main_health_check():
     """
     Basic health check for the application.
     """
+    logging.info("Main health check endpoint WAS CALLED. This is an application log.") # MODIFIED: Test log
     return {"status": "healthy"}
 
 if __name__ == "__main__":
+    # When running directly with uvicorn.run(), the basicConfig above should take effect.
+    # Uvicorn also has its own log_config parameter, but basicConfig often suffices for application logs.
     uvicorn.run(
         "backend.main:app",
         host=settings.API_HOST,
-        port=settings.API_PORT,
+        #port=settings.API_PORT,
+        port=8001,        
         reload=settings.DEBUG,
+        # log_level="info", # You can also set uvicorn's log level here
     )

@@ -4,6 +4,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 import logging
+from pydantic import Field
 
 load_dotenv()
 
@@ -44,8 +45,17 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
     CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 
+    # New settings for token limiting
+    USER_TOKEN_LIMIT_PER_MONTH: int = os.getenv("USER_TOKEN_LIMIT_PER_MONTH", 1000000)
+    
+    MAX_OUTPUT_TOKENS_GEMINI: int = os.getenv("MAX_OUTPUT_TOKENS_GEMINI", 2048)
+    
+    
+    SERPAPI_API_KEY: str = os.getenv("SERPAPI_API_KEY", "")
+
     class Config:
         env_file = ".env"
+        env_file_encoding = "utf-8"
         case_sensitive = True
         extra = 'ignore' # Ignore extra fields from environment variables
 

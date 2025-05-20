@@ -1,6 +1,6 @@
 // src/services/api.ts
 import axios, { AxiosRequestConfig } from 'axios';
-import { LoginCredentials, RegisterCredentials, AuthResponse, Report, ReportFilterParams, DashboardSummary, Company, SearchParams, CompanySearchResponse, ValuationResponse } from '../types/index.ts';
+import { LoginCredentials, RegisterCredentials, AuthResponse, Report, ReportFilterParams, DashboardSummary, Company, SearchParams, CompanySearchResponse, ValuationResponse, ChatRequestAPI, ChatResponseAPI, FileUploadResponseAPI, CompanyAllInfoResponse } from '../types/index.ts';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -199,6 +199,45 @@ export const searchService = {
         console.error('API error in valuateCompany:', error);
         throw error;
     }
+  }
+};
+
+// Info service (for the new Company Information page)
+export const infoService = {
+  getCompanyAllInfo: async (ico: string): Promise<CompanyAllInfoResponse> => {
+    const endpoint = `/info/${ico}`;
+    console.log(`API call: getCompanyAllInfo to ${endpoint}`);
+    try {
+      const response = await api.get(endpoint);
+      console.log('API response for getCompanyAllInfo:', response.data);
+      return response.data as CompanyAllInfoResponse;
+    } catch (error) {
+      console.error(`API error in getCompanyAllInfo for ICO ${ico}:`, error);
+      throw error; // Re-throw to be caught by the thunk
+    }
+  }
+};
+
+// Chat service
+export const chatService = {
+  sendChatMessage: async (request: ChatRequestAPI): Promise<ChatResponseAPI> => {
+    const response = await api.post('/chat/chat', request);
+    return response.data;
+  },
+
+  uploadPdfForChat: async (file: File, onUploadProgress?: (progressEvent: any) => void): Promise<FileUploadResponseAPI> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const config: AxiosRequestConfig = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      onUploadProgress,
+    };
+    // Assuming the backend endpoint for chat PDF upload is /chat/upload-pdf
+    const response = await api.post('/chat/upload-pdf', formData, config);
+    return response.data;
   }
 };
 

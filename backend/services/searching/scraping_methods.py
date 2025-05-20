@@ -2,9 +2,9 @@ from typing import Dict, Any, List
 import logging
 
 # Import the scraping functions directly
-from backend.searching.scraping_scripts.person_company_scraper import scrape_companies_by_person
-from backend.searching.scraping_scripts.ico_company_scraper import scrape_company_by_ico
-from backend.searching.scraping_scripts.name_company_scraper import scrape_companies_by_name
+from backend.services.searching.scraping_scripts.person_company_scraper import scrape_companies_by_person
+from backend.services.searching.scraping_scripts.ico_company_scraper import scrape_company_by_ico
+from backend.services.searching.scraping_scripts.name_company_scraper import scrape_companies_by_name
 
 # Setup logging
 logger = logging.getLogger(__name__)

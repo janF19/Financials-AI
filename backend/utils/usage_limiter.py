@@ -99,4 +99,99 @@ def check_and_increment_api_usage(current_user: User):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Could not verify API usage limits. Please try again later."
+        )
+
+# New functions for token limiting
+
+def get_token_usage_status(current_user: User) -> tuple[UUID, int, int, str]:
+    """
+    Fetches the user's current token usage, handles monthly reset, and returns status.
+    Returns:
+        tuple: (user_db_id, current_token_usage, token_limit_per_month, current_month_start_iso)
+    """
+    try:
+        if not current_user or not current_user.email:
+            logger.error(f"Invalid user object passed to token usage checker. User ID: {current_user.id if current_user else 'None'}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Could not verify user identity for token usage limits (invalid user data)."
+            )
+        user_email = current_user.email
+        public_user_id_for_log = current_user.id # This is the auth.users.id, which should match public.users.id if synced
+        logger.info(f"Checking token usage for user email: {user_email} (User ID: {public_user_id_for_log})")
+
+        # Query public.users to get token usage data
+        # Ensure your public.users table has 'token_usage_this_month' (BIGINT) and 'token_usage_month_start' (DATE)
+        public_user_query = supabase.table("users").select("id, token_usage_this_month, token_usage_month_start").eq("email", user_email).maybe_single().execute()
+
+        if not public_user_query.data:
+            logger.error(f"No corresponding user found in public.users table for email: {user_email} (User ID: {public_user_id_for_log})")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User profile not found for token usage tracking."
+            )
+
+        public_user_data = public_user_query.data
+        user_db_id = public_user_data["id"] # This is the public.users.id
+        current_token_usage = public_user_data.get("token_usage_this_month", 0)
+        db_month_start_str = public_user_data.get("token_usage_month_start")
+        db_month_start = None
+
+        if db_month_start_str:
+            try:
+                db_month_start = datetime.date.fromisoformat(db_month_start_str)
+            except (ValueError, TypeError):
+                logger.warning(f"Could not parse token_usage_month_start date '{db_month_start_str}' for user {user_email}. Resetting count.")
+                db_month_start = None
+
+        today = datetime.date.today()
+        current_month_start = today.replace(day=1)
+        token_limit = settings.USER_TOKEN_LIMIT_PER_MONTH
+
+        if db_month_start != current_month_start:
+            logger.info(f"Resetting token usage count for user {user_email} (public ID: {user_db_id}) for month {current_month_start.isoformat()}")
+            current_token_usage = 0
+            update_data = {
+                "token_usage_this_month": 0,
+                "token_usage_month_start": current_month_start.isoformat()
+            }
+            supabase.table("users").update(update_data).eq("id", user_db_id).execute()
+            # If you want to return the very latest after reset, you could re-fetch,
+            # but for this flow, returning 0 and the new month start is fine.
+            db_month_start = current_month_start # Update for return value consistency
+
+        return user_db_id, current_token_usage, token_limit, (db_month_start or current_month_start).isoformat()
+
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        logger.error(f"Error getting token usage status for user {current_user.email if current_user else 'UNKNOWN'}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not retrieve token usage status. Please try again later."
+        )
+
+def update_user_token_usage(user_id: UUID, new_token_count: int, month_start_iso: str):
+    """
+    Updates the user's token usage count for the current billing month.
+    Args:
+        user_id: The ID of the user in the public.users table.
+        new_token_count: The new total token count for the month.
+        month_start_iso: The ISO format string of the start of the current billing month.
+    """
+    try:
+        logger.info(f"Updating token usage for user ID {user_id} to {new_token_count} for month starting {month_start_iso}")
+        update_data = {
+            "token_usage_this_month": new_token_count,
+            "token_usage_month_start": month_start_iso # Ensure this is always set
+        }
+        supabase.table("users").update(update_data).eq("id", user_id).execute()
+    except Exception as e:
+        # Log critical error, as this means usage might not be recorded correctly
+        logger.critical(f"CRITICAL: Failed to update token usage for user ID {user_id} to {new_token_count}. Error: {e}", exc_info=True)
+        # Depending on policy, you might not want to raise HTTPException here if the chat already succeeded,
+        # but logging is essential. For now, let's re-raise to make it visible.
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to record token usage. Please contact support if this persists."
         ) 

@@ -26,7 +26,9 @@ import {
   Upload as UploadIcon,
   Search as SearchIcon,
   Person as PersonIcon,
-  ExitToApp as LogoutIcon
+  ExitToApp as LogoutIcon,
+  Chat as ChatIcon,
+  BusinessCenter as CompanyInfoIcon,
 } from '@mui/icons-material';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { logout } from '../store/slices/authSlice';
@@ -70,6 +72,8 @@ const Layout = () => {
     { text: 'Reports', icon: <ReportIcon />, path: '/reports' },
     { text: 'Process', icon: <UploadIcon />, path: '/process' },
     { text: 'Search', icon: <SearchIcon />, path: '/search' },
+    { text: 'Company Info', icon: <CompanyInfoIcon />, path: '/info' },
+    { text: 'Chat', icon: <ChatIcon />, path: '/chat' },
   ];
   
   const drawer = (

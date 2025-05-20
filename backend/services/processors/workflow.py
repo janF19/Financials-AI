@@ -1,10 +1,10 @@
 import logging
 from pathlib import Path
-from backend.processors.ocr.processing import OCRProcessor
-from backend.processors.reporting.generator import ReportGenerator
+from backend.services.processors.ocr.processing import OCRProcessor
+from backend.services.processors.reporting.generator import ReportGenerator
 from backend.config.settings import settings
-from backend.processors.valuation.valuator import CompanyValuator
-from backend.processors.financials.extractor import FinancialExtractor
+from backend.services.processors.valuation.valuator import CompanyValuator
+from backend.services.processors.financials.extractor import FinancialExtractor
 import json
 import os
 import uuid

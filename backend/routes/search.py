@@ -11,16 +11,16 @@ from backend.models.report import ReportResponse
 from backend.auth.dependencies import get_current_user
 from backend.database import supabase
 from pydantic import BaseModel
-from backend.searching.scraping_methods import get_companies_from_ico, get_companies_from_name_company, get_companies_from_name_person
+from backend.services.searching.scraping_methods import get_companies_from_ico, get_companies_from_name_company, get_companies_from_name_person
 import logging
 from backend.models.search_models import CompanyInfo, CompanySearchByPersonResponse, CompanySearchByNameResponse
 import json
-from backend.searching.scraping_scripts.ico_file_scraper import get_latest_financial_document
+from backend.services.searching.scraping_scripts.ico_file_scraper import get_latest_financial_document
 from fastapi import BackgroundTasks
 from pathlib import Path
 import uuid
 import os
-from backend.processors.workflow2 import ValuationWorkflow2
+from backend.services.processors.workflow2 import ValuationWorkflow2
 from backend.utils.usage_limiter import check_and_increment_api_usage
 from backend.tasks import process_ico_valuation_task
 

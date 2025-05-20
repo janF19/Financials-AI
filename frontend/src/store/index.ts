@@ -10,11 +10,13 @@ import reportReducer from './slices/reportSlice';
 import dashboardReducer from './slices/dashboardSlice';
 import uploadReducer from './slices/uploadSlice';
 import searchReducer from './slices/searchSlice';
+import companyInfoReducer from './slices/companyInfoSlice';
+import chatReducer from './slices/chatSlice';
 
 const persistConfig = {
   key: 'root',
   storage,
-  whitelist: ['auth'], // Only persist auth state
+  whitelist: ['auth', 'chat'],
 };
 
 const rootReducer = combineReducers({
@@ -23,6 +25,8 @@ const rootReducer = combineReducers({
   dashboard: dashboardReducer,
   upload: uploadReducer,
   search: searchReducer,
+  companyInfo: companyInfoReducer,
+  chat: chatReducer,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;
@@ -38,8 +42,18 @@ export const store = configureStore({
           'persist/PERSIST',
           fetchCompanies.rejected.type,
           triggerValuation.rejected.type,
+          'chat/sendMessage/rejected',
+          'chat/uploadFile/rejected',
+          'chat/addMessage',
         ],
-        ignoredPaths: ['search.error', 'search.valuationError'],
+        ignoredPaths: [
+          'search.error',
+          'search.valuationError',
+          'chat.error',
+          'chat.uploadError',
+          'chat.messages',
+        ],
+        ignoredActionPaths: ['payload.timestamp', 'meta.arg', 'payload.headers'],
       },
     }),
 });

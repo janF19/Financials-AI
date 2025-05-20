@@ -30,41 +30,22 @@ logger = logging.getLogger(__name__)
 
 # --- Pydantic Models for Gemini Response Structure ---
 
-class StatementItem(BaseModel):
-    """Model for financial statement line items"""
-    value: Optional[Union[float, int, str]] = Field(None, description="The monetary value or text of this item")
-    description: Optional[str] = Field(None, description="Optional description of this item")
-
-    model_config = {"extra": "allow"} # Allow extra fields from Gemini if needed
+class FinancialStatementLineItem(BaseModel):
+    """Represents a single line item in a financial statement, including its name (key)."""
+    item_name: str = Field(description="The name or key of the financial item (e.g., 'Aktiva celkem').")
+    value: Optional[str] = Field(None, description="The monetary value or text of this item. Numerical values should be returned as strings.")
+    description: Optional[str] = Field(None, description="Optional description of this item.")
+    model_config = {"extra": "allow"}
 
 class Statement(BaseModel):
     """Financial statement model"""
     name: Optional[str] = Field(None, description="Name of financial statement (e.g., Rozvaha)")
-    values: Dict[str, Union[StatementItem, Any]] = Field( # Allow Any temporarily for flexibility
-        default_factory=dict,
-        description="Key value pairs of items on statement. Keys are item names (e.g., 'Aktiva celkem'), values are StatementItem objects or raw values."
+    items: List[FinancialStatementLineItem] = Field(
+        default_factory=list,
+        description="List of line items in the statement. Each item includes its name (item_name), value, and optional description."
     )
 
     model_config = {"extra": "allow"}
-
-    @model_validator(mode='before')
-    @classmethod
-    def ensure_values_are_items(cls, data: Any) -> Any:
-        """Attempt to convert raw values in 'values' dict to StatementItem before validation."""
-        if isinstance(data, dict) and 'values' in data and isinstance(data['values'], dict):
-            processed_values = {}
-            for key, value in data['values'].items():
-                if not isinstance(value, dict):
-                    processed_values[key] = {"value": value, "description": None}
-                elif 'value' not in value: # Handle cases where it's a dict but not quite StatementItem
-                     processed_values[key] = {"value": str(value), "description": None} # Convert dict to string as fallback
-                else:
-                    processed_values[key] = value
-            data['values'] = processed_values
-        elif isinstance(data, dict) and 'values' not in data:
-             # If 'values' is missing entirely, initialize it as empty
-             data['values'] = {}
-        return data
 
 class Finance(BaseModel):
     """Complete financial information extracted from reports using Gemini"""
@@ -79,15 +60,15 @@ class Finance(BaseModel):
     industry: Optional[str] = Field(None, description="Odvětví, ve kterém společnost podniká")
     analytical_summary: Optional[str] = Field(None, description="Stručný analytický souhrn klíčových zjištění z dokumentu.")
     balance_sheet: Optional[Statement] = Field(
-        default_factory=lambda: Statement(name="Rozvaha", values={}),
+        default_factory=lambda: Statement(name="Rozvaha", items=[]),
         description="Informace z Rozvahy (Balance Sheet)"
     )
     cashflow_statement: Optional[Statement] = Field(
-        default_factory=lambda: Statement(name="Výkaz peněžních toků", values={}),
+        default_factory=lambda: Statement(name="Výkaz peněžních toků", items=[]),
         description="Informace z Výkazu peněžních toků (Cash Flow Statement)"
     )
     income_statement: Optional[Statement] = Field(
-        default_factory=lambda: Statement(name="Výkaz zisků a ztrát", values={}),
+        default_factory=lambda: Statement(name="Výkaz zisků a ztrát", items=[]),
         description="Informace z Výkazu zisků a ztrát (Income Statement)"
     )
 
@@ -143,28 +124,80 @@ def inline_json_schema_defs(schema: Dict[str, Any]) -> Dict[str, Any]:
 def remove_unsupported_schema_keywords(schema: Dict[str, Any]) -> Dict[str, Any]:
     """
     Recursively removes keywords from a JSON schema that are not supported
-    by the Google API's Schema definition (like 'additionalProperties').
+    by the Google API's Schema definition (like 'title', 'default')
+    and attempts to simplify 'anyOf' constructs from Pydantic's Optional/Union.
     """
     if not isinstance(schema, dict):
         return schema
 
-    # Keywords to remove (add others here if needed)
-    unsupported_keywords = ["additionalProperties", "definitions", "$defs"] # Also remove defs just in case
+    unsupported_general_keywords = ["title", "definitions", "$defs", "default", "additionalProperties"]
+    
+    # Make a mutable copy to work with
+    cleaned_schema = schema.copy()
 
-    # Create a new dictionary excluding unsupported keywords at the current level
-    cleaned_schema = {k: v for k, v in schema.items() if k not in unsupported_keywords}
+    # Special handling for 'anyOf' (primarily for Optional[T] or Union[T1, T2, ...])
+    if "anyOf" in cleaned_schema:
+        any_of_list = cleaned_schema.pop("anyOf") # Remove 'anyOf' and get its value
+        non_null_schema_branches = []
+        if isinstance(any_of_list, list):
+            for branch_schema in any_of_list:
+                is_null_type_schema = isinstance(branch_schema, dict) and \
+                                      branch_schema.get("type") == "null" and \
+                                      len(branch_schema) == 1
+                if not is_null_type_schema:
+                    non_null_schema_branches.append(branch_schema)
+        
+        if len(non_null_schema_branches) == 1:
+            # This is likely an Optional[T]. We take the schema of T.
+            # The content of the chosen branch needs to be merged into the current cleaned_schema.
+            # Subsequent processing in this function will then clean this merged content.
+            chosen_branch_content = non_null_schema_branches[0]
+            if isinstance(chosen_branch_content, dict):
+                for k, v in chosen_branch_content.items():
+                    # Merge keys from the chosen branch. If a key (e.g., 'description')
+                    # existed at the 'anyOf' level and also inside the branch,
+                    # the branch's version will take precedence here.
+                    cleaned_schema[k] = v
+        elif len(non_null_schema_branches) > 1:
+            # This is a Union[T1, T2, ...]. This is complex for Google's schema.
+            # Simplification to a single type (e.g., string) will lose properties.
+            # For now, we'll try to extract a type, prioritizing string.
+            # This part may need to be revisited if complex Unions of objects are essential.
+            extracted_types = []
+            for branch in non_null_schema_branches:
+                if isinstance(branch, dict) and "type" in branch:
+                    extracted_types.append(branch["type"])
+            
+            if "string" in extracted_types:
+                cleaned_schema["type"] = "string"
+            elif extracted_types:
+                cleaned_schema["type"] = extracted_types[0]
+            # Note: This simplification for Unions loses detailed structure.
+            # Any existing properties in cleaned_schema from before 'anyOf' processing are kept,
+            # but properties specific to the Union branches are not merged.
+        # If non_null_schema_branches is empty, cleaned_schema is as it was, just without 'anyOf'.
 
+    # Remove other general unsupported keywords from the current level of cleaned_schema
+    # This will also apply to keys merged from an 'anyOf' branch.
+    keys_to_delete = [key for key in unsupported_general_keywords if key in cleaned_schema]
+    for k_del in keys_to_delete:
+        del cleaned_schema[k_del]
+    
     # Recursively clean nested dictionaries and lists
+    # Build the final schema for this level by processing values of the (now modified) cleaned_schema
+    final_schema_at_this_level = {}
     for key, value in cleaned_schema.items():
         if isinstance(value, dict):
-            cleaned_schema[key] = remove_unsupported_schema_keywords(value)
+            final_schema_at_this_level[key] = remove_unsupported_schema_keywords(value)
         elif isinstance(value, list):
-            cleaned_schema[key] = [
+            final_schema_at_this_level[key] = [
                 remove_unsupported_schema_keywords(item) if isinstance(item, dict) else item
                 for item in value
             ]
+        else:
+            final_schema_at_this_level[key] = value
 
-    return cleaned_schema
+    return final_schema_at_this_level
 
 
 # --- Gemini Schema Definition from Pydantic Model ---
@@ -209,7 +242,7 @@ class FinancialExtractor3:
                 # models = [m for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
                 # if not models:
                 #     raise ValueError("No suitable Gemini models found with the provided API key.")
-                self.model = genai.GenerativeModel(model_name="gemini-1.5-flash") # Or "gemini-1.5-pro"
+                self.model = genai.GenerativeModel(model_name="gemini-2.5-flash-preview-04-17") # Or "gemini-1.5-pro"
                 logger.info(f"Google GenAI client configured successfully using model: {self.model.model_name}")
             except Exception as e:
                  logger.error(f"Failed to configure Google GenAI client: {e}", exc_info=True)
@@ -241,27 +274,30 @@ class FinancialExtractor3:
             # Add other fields from Finance model if needed by downstream tasks
         }
 
-        # Map statements - Extracting just the 'value' for simplicity to match V2 structure
-        # Downstream components might need adjustment if they expect more detail
-        if finance_obj.income_statement and finance_obj.income_statement.values:
+        # Map statements - Convert List[FinancialStatementLineItem] to Dict[str, str (value)]
+        # Downstream components might need adjustment if they expect more detail than just the value.
+        if finance_obj.income_statement and finance_obj.income_statement.items:
             output_dict['income_statement'] = {
-                k: v.value if isinstance(v, StatementItem) else v # Extract value
-                for k, v in finance_obj.income_statement.values.items()
+                item.item_name: item.value
+                for item in finance_obj.income_statement.items
+                if item.item_name and item.value is not None # Ensure key exists and value is not None
             }
-            # Add analytical summary if present in the statement itself (optional)
+            # Add analytical summary if present in the statement itself (optional) - this would need 'analytical_summary' field in Statement model
             # output_dict['income_statement']['analytical_summary'] = getattr(finance_obj.income_statement, 'analytical_summary', None)
 
-        if finance_obj.balance_sheet and finance_obj.balance_sheet.values:
+        if finance_obj.balance_sheet and finance_obj.balance_sheet.items:
             output_dict['balance_sheet'] = {
-                k: v.value if isinstance(v, StatementItem) else v
-                for k, v in finance_obj.balance_sheet.values.items()
+                item.item_name: item.value
+                for item in finance_obj.balance_sheet.items
+                if item.item_name and item.value is not None
             }
             # output_dict['balance_sheet']['analytical_summary'] = getattr(finance_obj.balance_sheet, 'analytical_summary', None)
 
-        if finance_obj.cashflow_statement and finance_obj.cashflow_statement.values:
+        if finance_obj.cashflow_statement and finance_obj.cashflow_statement.items:
              output_dict['cash_flow'] = {
-                k: v.value if isinstance(v, StatementItem) else v
-                for k, v in finance_obj.cashflow_statement.values.items()
+                item.item_name: item.value
+                for item in finance_obj.cashflow_statement.items
+                if item.item_name and item.value is not None
             }
             # output_dict['cash_flow']['analytical_summary'] = getattr(finance_obj.cashflow_statement, 'analytical_summary', None)
 
@@ -331,14 +367,22 @@ class FinancialExtractor3:
                 *   Celkové tržby (nebo Výnosy celkem) za aktuální období
                 *   Celkové tržby (nebo Výnosy celkem) za minulé období
 
-            3.  **Finanční výkazy (extrahuj klíčové položky jako páry klíč-hodnota):**
-                *   **Rozvaha (Balance Sheet):** Extrahuj hlavní položky aktiv a pasiv (např. Aktiva celkem, Vlastní kapitál, Cizí zdroje, Dlouhodobý majetek, Oběžná aktiva atd.) pro aktuální i minulé období, pokud jsou k dispozici.
-                *   **Výkaz zisku a ztráty (Income Statement):** Extrahuj hlavní položky (např. Tržby za prodej výrobků a služeb, Provozní výsledek hospodaření, Výsledek hospodaření za účetní období, EBT, EBIT) pro aktuální i minulé období.
-                *   **Výkaz peněžních toků (Cash Flow Statement):** Extrahuj hlavní položky (např. Peněžní toky z provozní činnosti, Peněžní toky z investiční činnosti, Peněžní toky z finanční činnosti, Stav peněžních prostředků na konci období) pro aktuální i minulé období.
+            3.  **Finanční výkazy (extrahuj položky jako seznam objektů):**
+                Pro každý výkaz (Rozvaha, Výkaz zisku a ztráty, Výkaz peněžních toků):
+                *   Uveďte název výkazu (např. "Rozvaha").
+                *   Položky výkazu extrahujte jako seznam (pole) objektů do pole 'items'. Každý objekt v seznamu by měl obsahovat:
+                    *   `item_name`: Název položky (např. "Aktiva celkem"). Musí být string.
+                    *   `value`: Hodnota položky (jako text, např. "123.45" nebo "10000"). Může být null, pokud chybí.
+                    *   `description`: Volitelný popis položky (jako text). Může být null.
+                Příklad pro jednu položku v seznamu 'items' pro Rozvahu:
+                `{{ "item_name": "Aktiva celkem", "value": "1234567.89", "description": "Celková aktiva společnosti" }}`
+                Další příklad:
+                `{{ "item_name": "Dlouhodobý nehmotný majetek", "value": "50000.00", "description": null }}`
 
             4.  **Analytický souhrn:** Poskytni velmi stručný (2-4 věty) souhrn klíčových zjištění, trendů nebo významných událostí zmíněných v dokumentu (např. hlavní zdroj příjmů, významné investice, změny ve struktuře majetku/dluhu).
 
-            Vrať výsledek POUZE jako JSON objekt, který odpovídá poskytnutému schématu. Pro každou položku ve finančních výkazech (Rozvaha, VZZ, CF) uveď hodnotu ('value') a případně stručný popis ('description'), pokud je relevantní. Hodnoty by měly být čísla (integer nebo float) pokud je to možné, jinak text. Použij `null`, pokud hodnota chybí.
+            Vrať výsledek POUZE jako JSON objekt, který odpovídá poskytnutému schématu.
+            Pro číselné hodnoty v poli 'value' vraťte číslo jako text (např. "123.45" nebo "1000"). Pro nečíselné hodnoty vraťte text. Použij `null`, pokud hodnota chybí nebo není relevantní (např. pro 'description').
             """
 
             logger.info("Sending request to Gemini API for structured data extraction...")

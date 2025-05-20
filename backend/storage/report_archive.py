@@ -59,7 +59,7 @@ def save_report(user_id: str, temp_report_path: Path, original_filename: str, re
         # Example: Uploading the file
         with open(temp_report_path, 'rb') as f:
             # Use upsert=True to overwrite if it somehow exists
-            supabase.storage.from_(settings.SUPABASE_REPORTS_BUCKET).upload(
+            supabase.storage.from_(settings.STORAGE_BUCKET).upload(
                 path=storage_path,
                 file=f,
                 file_options={"content-type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "upsert": "true"}
@@ -78,7 +78,7 @@ def save_report(user_id: str, temp_report_path: Path, original_filename: str, re
         try:
              # Convert metadata dict to bytes for upload
              metadata_bytes = json.dumps(metadata, indent=2).encode('utf-8')
-             supabase.storage.from_(settings.SUPABASE_REPORTS_BUCKET).upload(
+             supabase.storage.from_(settings.STORAGE_BUCKET).upload(
                  path=metadata_path,
                  file=metadata_bytes,
                  file_options={"content-type": "application/json", "upsert": "true"}
@@ -89,7 +89,7 @@ def save_report(user_id: str, temp_report_path: Path, original_filename: str, re
 
 
         # Get public URL
-        res = supabase.storage.from_(settings.SUPABASE_REPORTS_BUCKET).get_public_url(storage_path)
+        res = supabase.storage.from_(settings.STORAGE_BUCKET).get_public_url(storage_path)
         public_url = res # Adjust based on actual return value if needed
 
         logger.info(f"Report public URL: {public_url}")

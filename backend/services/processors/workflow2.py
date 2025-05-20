@@ -1,9 +1,9 @@
 import logging
 from pathlib import Path
-from backend.processors.ocr.processing import OCRProcessor # Assuming OCRProcessor is reusable
-from backend.processors.financials.extractor2 import FinancialExtractor2
-from backend.processors.valuation.valuator2 import CompanyValuator2
-from backend.processors.reporting.generator2 import ReportGenerator2
+from backend.services.processors.ocr.processing import OCRProcessor # Assuming OCRProcessor is reusable
+from backend.services.processors.financials.extractor2 import FinancialExtractor2
+from backend.services.processors.valuation.valuator2 import CompanyValuator2
+from backend.services.processors.reporting.generator2 import ReportGenerator2
 from backend.config.settings import settings
 import json
 import os

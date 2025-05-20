@@ -2,9 +2,9 @@
 import logging
 from pathlib import Path
 # Removed OCRProcessor import
-from backend.processors.financials.extractor3 import FinancialExtractor3 # Import V3 Extractor
-from backend.processors.valuation.valuator2 import CompanyValuator2 # Reusing V2 Valuator for now
-from backend.processors.reporting.generator2 import ReportGenerator2 # Reusing V2 Generator for now
+from backend.services.processors.financials.extractor3 import FinancialExtractor3 # Import V3 Extractor
+from backend.services.processors.valuation.valuator2 import CompanyValuator2 # Reusing V2 Valuator for now
+from backend.services.processors.reporting.generator2 import ReportGenerator2 # Reusing V2 Generator for now
 from backend.config.settings import settings
 import json
 import os
