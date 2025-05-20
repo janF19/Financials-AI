@@ -14,6 +14,8 @@ import { Send as SendIcon, AttachFile as AttachFileIcon, DeleteSweep as DeleteSw
 import ChatMessage from './ChatMessage';
 import FileUploadDialog from './FileUploadDialog'; // Import the dialog
 import { UseChatReturn } from '../../hooks/useChat'; // Import the hook's return type
+import { clearChat } from '../../store/slices/chatSlice'; // Import clearChat
+import { useAppDispatch } from '../../hooks/redux'; // Import useAppDispatch
 
 // Styles for typing indicator (inspired by your example)
 const typingIndicatorStyles = {
@@ -47,19 +49,20 @@ const typingIndicatorStyles = {
 
 const ChatInterface: React.FC<UseChatReturn> = ({
   messages,
-  input,
-  setInput,
+  userInput,
+  setUserInput,
   isLoading,
   // error, // error is handled by toast in useChat, but can be displayed here too
-  sendMessage,
-  clearMessages,
-  uploadedFile,
-  setUploadedFile,
+  handleSendMessage: sendMessageProp,
+  currentFileDisplayName,
+  currentFileUri,
+  clearUploadedFile,
   handleFileUpload,
   isUploading,
 }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [isFileUploadOpen, setIsFileUploadOpen] = useState(false);
+  const dispatch = useAppDispatch(); // Get dispatch
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -67,16 +70,20 @@ const ChatInterface: React.FC<UseChatReturn> = ({
 
   useEffect(scrollToBottom, [messages, isLoading]);
 
-  const handleSendMessage = async (e?: React.FormEvent) => {
+  const handleSendMessageLocal = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    await sendMessage();
+    await sendMessageProp();
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault();
-      handleSendMessage();
+      handleSendMessageLocal();
     }
+  };
+
+  const handleClearChat = () => {
+    dispatch(clearChat());
   };
 
   return (
@@ -103,26 +110,26 @@ const ChatInterface: React.FC<UseChatReturn> = ({
         <div ref={messagesEndRef} />
       </Paper>
 
-      {uploadedFile && (
+      {currentFileUri && currentFileDisplayName && (
         <Chip
           icon={<AttachFileIcon />}
-          label={`Attached: ${uploadedFile.display_name}`}
-          onDelete={() => setUploadedFile(null)}
+          label={`Attached: ${currentFileDisplayName}`}
+          onDelete={clearUploadedFile}
           color="info"
           sx={{ mb: 1, maxWidth: 'fit-content', alignSelf: 'flex-start' }}
         />
       )}
 
-      <Box component="form" onSubmit={handleSendMessage} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <IconButton onClick={() => setIsFileUploadOpen(true)} color="primary" aria-label="attach file" disabled={isUploading || !!uploadedFile}>
+      <Box component="form" onSubmit={handleSendMessageLocal} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <IconButton onClick={() => setIsFileUploadOpen(true)} color="primary" aria-label="attach file" disabled={isUploading || !!currentFileUri}>
           <AttachFileIcon />
         </IconButton>
         <TextField
           fullWidth
           variant="outlined"
           placeholder="Type your message here..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+          value={userInput}
+          onChange={(e) => setUserInput(e.target.value)}
           onKeyDown={handleKeyDown}
           multiline
           maxRows={4}
@@ -133,12 +140,12 @@ const ChatInterface: React.FC<UseChatReturn> = ({
           type="submit"
           variant="contained"
           color="primary"
-          disabled={isLoading || isUploading || (!input.trim() && !uploadedFile)}
+          disabled={isLoading || isUploading || (!userInput.trim() && !currentFileUri)}
           endIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
         >
           Send
         </Button>
-         <IconButton onClick={clearMessages} color="default" aria-label="clear chat" title="Clear Chat History" disabled={isLoading || isUploading}>
+         <IconButton onClick={handleClearChat} color="default" aria-label="clear chat" title="Clear Chat History" disabled={isLoading || isUploading}>
           <DeleteSweepIcon />
         </IconButton>
       </Box>
@@ -151,12 +158,12 @@ const ChatInterface: React.FC<UseChatReturn> = ({
           // Dialog will show success, user can close it or it auto-closes on success in some designs
           // For now, let's keep it simple: if upload is successful, the chip will appear.
           // We might want to close the dialog automatically on successful upload.
-          if (!isUploading && uploadedFile) { // Check if upload was successful (uploadedFile is set)
+          if (!isUploading && currentFileUri) {
              // setIsFileUploadOpen(false); // Optionally close dialog on success
           }
         }}
         isUploading={isUploading}
-        uploadedFileDisplayName={uploadedFile?.display_name}
+        uploadedFileDisplayName={currentFileDisplayName}
       />
     </Box>
   );
