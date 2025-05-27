@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Paper, Typography, Avatar, Chip } from '@mui/material';
+import { Box, Paper, Typography, Avatar, Chip, Tooltip } from '@mui/material';
 import { Person as UserIcon, Assistant as AssistantIcon, AttachFile as AttachFileIcon } from '@mui/icons-material';
 
 import { ChatMessageUI } from '../../types/index.ts';
@@ -10,6 +10,23 @@ interface ChatMessageProps {
 
 const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
   const isUser = message.role === 'user';
+
+  // Ensure timestamp is a Date object before formatting
+  let timestampDate: Date;
+  if (message.timestamp instanceof Date) {
+    timestampDate = message.timestamp;
+  } else if (typeof message.timestamp === 'string') {
+    timestampDate = new Date(message.timestamp); // Convert string to Date
+  } else {
+    // Fallback for unexpected timestamp type, though ideally this shouldn't happen
+    timestampDate = new Date();
+    console.warn("Unexpected timestamp type:", message.timestamp);
+  }
+
+  // Defensive check for invalid date string conversion
+  const timeString = !isNaN(timestampDate.getTime())
+    ? timestampDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : 'Invalid time';
 
   return (
     <Box
@@ -43,17 +60,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
               sx={{ mt: 1, backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
             />
           )}
-          <Typography
-            variant="caption"
-            display="block"
-            sx={{
-              mt: 0.5,
-              textAlign: isUser ? 'right' : 'left',
-              color: isUser ? 'rgba(255,255,255,0.7)' : 'text.secondary',
-            }}
-          >
-            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Typography>
+          <Tooltip title={timestampDate.toLocaleString()} placement={isUser ? "top-start" : "top-end"}>
+            <Typography
+              variant="caption"
+              display="block"
+              sx={{
+                mt: 0.5,
+                textAlign: isUser ? 'right' : 'left',
+                color: isUser ? 'rgba(255,255,255,0.7)' : 'text.secondary',
+              }}
+            >
+              {timeString}
+            </Typography>
+          </Tooltip>
         </Paper>
       </Box>
     </Box>
