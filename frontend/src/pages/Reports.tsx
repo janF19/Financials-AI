@@ -26,12 +26,18 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
-  Button
+  Button,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
 } from '@mui/material';
 import { Download as DownloadIcon, Delete as DeleteIcon, Refresh as RefreshIcon } from '@mui/icons-material';
 import { format } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../hooks/redux';
 import { fetchReports, downloadReport, deleteReport } from '../store/slices/reportSlice';
+import { fetchRecentReportsData, fetchReportsSummary } from '../store/slices/reportsSummarySlice';
 import { Report } from '../types/index';
 
 // Define the type for the data returned by fetchReports().unwrap()
@@ -70,16 +76,82 @@ const safeFormatDate = (dateString: string | null | undefined) => {
   }
 };
 
+const StatusChart = ({ summary }: { summary: any }) => {
+  const total = summary.total_reports || 1; // Avoid division by zero
+  const completedPercentage = Math.round((summary.completed_reports / total) * 100);
+  const processingPercentage = Math.round((summary.processing_reports / total) * 100);
+  const failedPercentage = Math.round((summary.failed_reports / total) * 100);
+
+  return (
+    <Box sx={{ mt: 2 }}>
+      <Typography variant="subtitle2" gutterBottom>
+        Report Status Distribution
+      </Typography>
+      <Box sx={{ display: 'flex', height: 20, width: '100%', borderRadius: 1, overflow: 'hidden' }}>
+        <Box
+          sx={{
+            width: `${completedPercentage}%`,
+            bgcolor: 'success.main',
+            transition: 'width 0.5s ease',
+          }}
+        />
+        <Box
+          sx={{
+            width: `${processingPercentage}%`,
+            bgcolor: 'warning.main',
+            transition: 'width 0.5s ease',
+          }}
+        />
+        <Box
+          sx={{
+            width: `${failedPercentage}%`,
+            bgcolor: 'error.main',
+            transition: 'width 0.5s ease',
+          }}
+        />
+      </Box>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'success.main', mr: 1 }} />
+          <Typography variant="caption">Completed ({summary.completed_reports})</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'warning.main', mr: 1 }} />
+          <Typography variant="caption">Processing ({summary.processing_reports})</Typography>
+        </Box>
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'error.main', mr: 1 }} />
+          <Typography variant="caption">Failed ({summary.failed_reports})</Typography>
+        </Box>
+      </Box>
+    </Box>
+  );
+};
+
 const Reports = () => {
   const dispatch = useAppDispatch();
-  const { reports = [], totalCount = 0, isLoading, error, downloadingId } = useAppSelector((state) => state.reports);
+  const navigate = useNavigate();
+
+  const {
+    reports = [],
+    totalCount = 0,
+    isLoading: isReportsLoading,
+    error: reportsError,
+    downloadingId
+  } = useAppSelector((state) => state.reports);
+
+  const {
+    summary,
+    recentReports,
+    isLoading: isSummaryLoading,
+    error: summaryError
+  } = useAppSelector((state) => state.reportsSummary);
 
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [statusFilter, setStatusFilter] = useState<string>(''); // 'all', 'pending', 'processed', 'failed'
   const [dialogOpen, setDialogOpen] = useState(false);
   const [reportToDelete, setReportToDelete] = useState<Report | null>(null);
-
 
   const fetchReportsData = () => {
     const params: any = { page: page + 1, limit: rowsPerPage };
@@ -98,13 +170,10 @@ const Reports = () => {
   }
 
   useEffect(() => {
+    dispatch(fetchRecentReportsData());
+    dispatch(fetchReportsSummary());
     fetchReportsData();
   }, [dispatch, page, rowsPerPage, statusFilter]);
-
-  useEffect(() => {
-    // When reports are loaded
-    console.log("Reports with statuses:", reports.map((r: Report) => ({ id: r.id, status: r.status })));
-  }, [reports]);
 
   const handleChangePage = (_event: unknown, newPage: number) => {
     setPage(newPage);
@@ -151,9 +220,9 @@ const Reports = () => {
   const getStatusChip = (status: string) => {
     switch (status) {
       case 'processed':
-        return <Chip size="small" label="processed" color="success" />;
+        return <Chip size="small" label="Processed" color="success" />;
       case 'pending':
-        return <Chip size="small" label="pending" color="warning" />;
+        return <Chip size="small" label="Pending" color="warning" />;
       case 'failed':
         return <Chip size="small" label="Failed" color="error" />;
       default:
@@ -161,15 +230,117 @@ const Reports = () => {
     }
   };
 
+  const handleUploadClick = () => {
+    navigate('/process');
+  };
+
   return (
     <Box>
       <Typography variant="h4" gutterBottom>
-        My Reports
+        Reports Overview
       </Typography>
 
-      {error && (
+      {isSummaryLoading && !summary.total_reports && (
+         <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}>
+           <CircularProgress />
+         </Box>
+      )}
+      {!isSummaryLoading && summaryError && (
         <Alert severity="error" sx={{ mb: 2 }}>
-          {error}
+          Failed to load summary: {summaryError}
+        </Alert>
+      )}
+      {!isSummaryLoading && !summaryError && summary.total_reports !== undefined && (
+        <Box display="grid" gridTemplateColumns={{ xs: '1fr', md: 'repeat(2, 1fr)' }} gap={3} sx={{ mb: 4 }}>
+          <Box>
+            <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Typography variant="h6" gutterBottom>
+                Reports Summary
+              </Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 2 }}>
+                <Box>
+                  <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'primary.light' }}>
+                    <Typography variant="h4">{summary.total_reports || 0}</Typography>
+                    <Typography variant="body2">Total Reports</Typography>
+                  </Paper>
+                </Box>
+                <Box>
+                  <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'success.light' }}>
+                    <Typography variant="h4">{summary.completed_reports || 0}</Typography>
+                    <Typography variant="body2">Completed</Typography>
+                  </Paper>
+                </Box>
+                <Box>
+                  <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'warning.light' }}>
+                    <Typography variant="h4">{summary.processing_reports || 0}</Typography>
+                    <Typography variant="body2">Processing</Typography>
+                  </Paper>
+                </Box>
+                <Box>
+                  <Paper sx={{ p: 2, textAlign: 'center', bgcolor: 'error.light' }}>
+                    <Typography variant="h4">{summary.failed_reports || 0}</Typography>
+                    <Typography variant="body2">Failed</Typography>
+                  </Paper>
+                </Box>
+              </Box>
+              <StatusChart summary={summary} />
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 'auto', pt: 2 }}>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <Button variant="contained" onClick={handleUploadClick}>
+                    Upload New
+                  </Button>
+                  <Button variant="contained" color="secondary" onClick={() => navigate('/search')}>
+                    Search
+                  </Button>
+                </Box>
+              </Box>
+            </Paper>
+          </Box>
+
+          <Box>
+            <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', height: '100%' }}>
+              <Typography variant="h6" gutterBottom>
+                Recent Reports
+              </Typography>
+              {isSummaryLoading && recentReports.length === 0 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1 }}>
+                    <CircularProgress />
+                </Box>
+              )}
+              {!isSummaryLoading && recentReports.length === 0 && !summaryError && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexGrow: 1, textAlign: 'center' }}>
+                  <Typography variant="body1" color="textSecondary">
+                    No recent reports found. <br/>Upload a document to get started.
+                  </Typography>
+                </Box>
+              )}
+              {!isSummaryLoading && recentReports.length > 0 && (
+                <List sx={{ width: '100%', bgcolor: 'background.paper', overflow: 'auto', maxHeight: 300 /* Adjust as needed */ }}>
+                  {recentReports.map((report: Report) => (
+                    <ListItem key={report.id} divider>
+                      <ListItemText
+                        primary={report.file_name}
+                        secondary={report.created_at ? format(new Date(report.created_at), 'PPp') : 'N/A'}
+                      />
+                      <ListItemSecondaryAction>
+                        {getStatusChip(report.status)}
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Paper>
+          </Box>
+        </Box>
+      )}
+
+      <Typography variant="h5" gutterBottom sx={{ mt: 4 }}>
+        All Reports
+      </Typography>
+
+      {reportsError && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {reportsError}
         </Alert>
       )}
 
@@ -190,12 +361,11 @@ const Reports = () => {
            </Select>
          </FormControl>
           <Tooltip title="Refresh List">
-              <IconButton onClick={fetchReportsData} disabled={isLoading}>
+              <IconButton onClick={fetchReportsData} disabled={isReportsLoading}>
                   <RefreshIcon />
               </IconButton>
           </Tooltip>
        </Paper>
-
 
       <Paper>
         <TableContainer>
@@ -210,21 +380,21 @@ const Reports = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {isLoading && (
+              {isReportsLoading && (
                 <TableRow>
                   <TableCell colSpan={5} align="center">
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               )}
-              {!isLoading && reports.length === 0 && (
+              {!isReportsLoading && reports.length === 0 && (
                  <TableRow>
                    <TableCell colSpan={5} align="center">
-                      No reports found. {statusFilter !== 'all' ? 'Try adjusting the filter.' : 'Upload a document to get started.'}
+                      No reports found. {statusFilter !== 'all' && statusFilter !== '' ? 'Try adjusting the filter.' : 'Upload a document to get started.'}
                    </TableCell>
                  </TableRow>
               )}
-              {!isLoading &&
+              {!isReportsLoading &&
                 reports.map((report: Report) => (
                   <TableRow hover key={report.id}>
                     <TableCell>{report.file_name}</TableCell>

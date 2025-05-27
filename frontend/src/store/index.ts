@@ -7,7 +7,7 @@ import { fetchCompanies, triggerValuation } from './slices/searchSlice';
 
 import authReducer from './slices/authSlice';
 import reportReducer from './slices/reportSlice';
-import dashboardReducer from './slices/dashboardSlice';
+import reportsSummaryReducer from './slices/reportsSummarySlice';
 import uploadReducer from './slices/uploadSlice';
 import searchReducer from './slices/searchSlice';
 import companyInfoReducer from './slices/companyInfoSlice';
@@ -21,8 +21,8 @@ const persistConfig = {
 
 const rootReducer = combineReducers({
   auth: authReducer,
+  reportsSummary: reportsSummaryReducer,
   reports: reportReducer,
-  dashboard: dashboardReducer,
   upload: uploadReducer,
   search: searchReducer,
   companyInfo: companyInfoReducer,
